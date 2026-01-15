@@ -1,0 +1,16 @@
+version: "3.9"
+services:
+  db:
+    image: postgres:16
+    container_name: timekeep-db
+    environment:
+      POSTGRES_USER: timekeep
+      POSTGRES_PASSWORD: timekeep
+      POSTGRES_DB: timekeep
+    ports:
+      - "5432:5432"
+    volumes:
+      - timekeep_db_data:/var/lib/postgresql/data
+
+volumes:
+  timekeep_db_data:
