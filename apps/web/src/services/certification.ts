@@ -20,24 +20,16 @@ export type CertifyPayload = {
 export async function fetchPendingCertification(
   token: string
 ): Promise<PendingCertification | null> {
-  const response = await apiRequest<{ status: string; data: PendingCertification | null }>(
-    '/api/certification/pending',
-    { token }
-  );
-  return response.data;
+  return apiRequest<PendingCertification | null>('/api/certification/pending', { token });
 }
 
 export async function certifyDay(
   payload: CertifyPayload,
   token: string
 ): Promise<DailySummary> {
-  const response = await apiRequest<{ status: string; data: DailySummary }>(
-    '/api/certification',
-    {
-      method: 'POST',
-      body: JSON.stringify(payload),
-      token
-    }
-  );
-  return response.data;
+  return apiRequest<DailySummary>('/api/certification', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    token
+  });
 }

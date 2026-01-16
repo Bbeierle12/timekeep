@@ -67,30 +67,21 @@ export async function fetchEntries(
   const query = searchParams.toString();
   const url = `/api/admin/entries${query ? `?${query}` : ''}`;
 
-  const response = await apiRequest<{ status: string; data: TimeEntry[] }>(url, { token });
-  return response.data;
+  return apiRequest<TimeEntry[]>(url, { token });
 }
 
 export async function fetchDailyEntries(
   date: string,
   token: string
 ): Promise<DailySummary> {
-  const response = await apiRequest<{ status: string; data: DailySummary }>(
-    `/api/admin/entries/daily/${date}`,
-    { token }
-  );
-  return response.data;
+  return apiRequest<DailySummary>(`/api/admin/entries/daily/${date}`, { token });
 }
 
 export async function fetchEmployeeEntries(
   employeeId: string,
   token: string
 ): Promise<TimeEntry[]> {
-  const response = await apiRequest<{ status: string; data: TimeEntry[] }>(
-    `/api/admin/entries/employee/${employeeId}`,
-    { token }
-  );
-  return response.data;
+  return apiRequest<TimeEntry[]>(`/api/admin/entries/employee/${employeeId}`, { token });
 }
 
 export async function fetchCorrections(
@@ -104,8 +95,7 @@ export async function fetchCorrections(
   const query = searchParams.toString();
   const url = `/api/admin/entries/corrections${query ? `?${query}` : ''}`;
 
-  const response = await apiRequest<{ status: string; data: Correction[] }>(url, { token });
-  return response.data;
+  return apiRequest<Correction[]>(url, { token });
 }
 
 export type RequestCorrectionPayload = {
@@ -118,29 +108,21 @@ export async function requestCorrection(
   payload: RequestCorrectionPayload,
   token: string
 ): Promise<Correction> {
-  const response = await apiRequest<{ status: string; data: Correction }>(
-    `/api/admin/entries/${entryId}/corrections`,
-    {
-      method: 'POST',
-      body: JSON.stringify(payload),
-      token
-    }
-  );
-  return response.data;
+  return apiRequest<Correction>(`/api/admin/entries/${entryId}/corrections`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    token
+  });
 }
 
 export async function approveCorrection(
   correctionId: string,
   token: string
 ): Promise<Correction> {
-  const response = await apiRequest<{ status: string; data: Correction }>(
-    `/api/admin/entries/corrections/${correctionId}/approve`,
-    {
-      method: 'POST',
-      token
-    }
-  );
-  return response.data;
+  return apiRequest<Correction>(`/api/admin/entries/corrections/${correctionId}/approve`, {
+    method: 'POST',
+    token
+  });
 }
 
 export async function rejectCorrection(
@@ -148,27 +130,19 @@ export async function rejectCorrection(
   reason: string,
   token: string
 ): Promise<Correction> {
-  const response = await apiRequest<{ status: string; data: Correction }>(
-    `/api/admin/entries/corrections/${correctionId}/reject`,
-    {
-      method: 'POST',
-      body: JSON.stringify({ reason }),
-      token
-    }
-  );
-  return response.data;
+  return apiRequest<Correction>(`/api/admin/entries/corrections/${correctionId}/reject`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+    token
+  });
 }
 
 export async function applyCorrection(
   correctionId: string,
   token: string
 ): Promise<Correction> {
-  const response = await apiRequest<{ status: string; data: Correction }>(
-    `/api/admin/entries/corrections/${correctionId}/apply`,
-    {
-      method: 'POST',
-      token
-    }
-  );
-  return response.data;
+  return apiRequest<Correction>(`/api/admin/entries/corrections/${correctionId}/apply`, {
+    method: 'POST',
+    token
+  });
 }

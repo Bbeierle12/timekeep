@@ -73,8 +73,7 @@ export async function fetchComplianceDashboard(
   const url = date
     ? `/api/admin/compliance/dashboard?date=${date}`
     : '/api/admin/compliance/dashboard';
-  const response = await apiRequest<{ status: string; data: ComplianceDashboard }>(url, { token });
-  return response.data;
+  return apiRequest<ComplianceDashboard>(url, { token });
 }
 
 export async function fetchViolations(
@@ -89,8 +88,7 @@ export async function fetchViolations(
   const query = searchParams.toString();
   const url = `/api/admin/compliance/violations${query ? `?${query}` : ''}`;
 
-  const response = await apiRequest<{ status: string; data: Violation[] }>(url, { token });
-  return response.data;
+  return apiRequest<Violation[]>(url, { token });
 }
 
 export async function fetchWaivers(
@@ -105,8 +103,7 @@ export async function fetchWaivers(
   const query = searchParams.toString();
   const url = `/api/admin/compliance/waivers${query ? `?${query}` : ''}`;
 
-  const response = await apiRequest<{ status: string; data: WaiverRecord[] }>(url, { token });
-  return response.data;
+  return apiRequest<WaiverRecord[]>(url, { token });
 }
 
 export async function fetchAttestations(
@@ -121,8 +118,7 @@ export async function fetchAttestations(
   const query = searchParams.toString();
   const url = `/api/admin/compliance/attestations${query ? `?${query}` : ''}`;
 
-  const response = await apiRequest<{ status: string; data: AttestationRecord[] }>(url, { token });
-  return response.data;
+  return apiRequest<AttestationRecord[]>(url, { token });
 }
 
 export async function fetchAlerts(
@@ -132,6 +128,5 @@ export async function fetchAlerts(
   const url = date
     ? `/api/admin/compliance/alerts?date=${date}`
     : '/api/admin/compliance/alerts';
-  const response = await apiRequest<{ status: string; data: ComplianceAlert[] }>(url, { token });
-  return response.data;
+  return apiRequest<ComplianceAlert[]>(url, { token });
 }

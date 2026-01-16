@@ -8,6 +8,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "seed:admin": "tsx src/db/seeds/seed-admin.ts",
+    "seed:test": "tsx src/db/seeds/seed-test-data.ts",
     "lint": "echo \"No lint configured\"",
     "test": "vitest",
     "test:run": "vitest run",

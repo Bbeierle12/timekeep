@@ -52,28 +52,20 @@ export async function signWaiver(
   payload: SignWaiverPayload,
   token: string
 ): Promise<Waiver> {
-  const response = await apiRequest<{ status: string; data: Waiver }>(
-    '/api/waiver',
-    {
-      method: 'POST',
-      body: JSON.stringify(payload),
-      token
-    }
-  );
-  return response.data;
+  return apiRequest<Waiver>('/api/waiver', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    token
+  });
 }
 
 export async function signAttestation(
   payload: SignAttestationPayload,
   token: string
 ): Promise<Attestation> {
-  const response = await apiRequest<{ status: string; data: Attestation }>(
-    '/api/attestation',
-    {
-      method: 'POST',
-      body: JSON.stringify(payload),
-      token
-    }
-  );
-  return response.data;
+  return apiRequest<Attestation>('/api/attestation', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    token
+  });
 }

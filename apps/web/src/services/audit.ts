@@ -36,8 +36,7 @@ export async function fetchAuditLog(
   if (params.offset) searchParams.set('offset', String(params.offset));
 
   const query = searchParams.toString();
-  const url = `/api/admin/audit${query ? `?${query}` : ''}`;
+  const url = `/api/admin/audit-log${query ? `?${query}` : ''}`;
 
-  const response = await apiRequest<{ status: string; data: AuditEntry[] }>(url, { token });
-  return response.data;
+  return apiRequest<AuditEntry[]>(url, { token });
 }

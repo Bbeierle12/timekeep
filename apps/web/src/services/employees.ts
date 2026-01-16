@@ -59,31 +59,22 @@ export async function listEmployees(
   const query = searchParams.toString();
   const url = `/api/admin/employees${query ? `?${query}` : ''}`;
 
-  const response = await apiRequest<{ status: string; data: Employee[] }>(url, { token });
-  return response.data;
+  return apiRequest<Employee[]>(url, { token });
 }
 
 export async function getEmployee(id: string, token: string): Promise<Employee> {
-  const response = await apiRequest<{ status: string; data: Employee }>(
-    `/api/admin/employees/${id}`,
-    { token }
-  );
-  return response.data;
+  return apiRequest<Employee>(`/api/admin/employees/${id}`, { token });
 }
 
 export async function createEmployee(
   payload: CreateEmployeePayload,
   token: string
 ): Promise<Employee> {
-  const response = await apiRequest<{ status: string; data: Employee }>(
-    '/api/admin/employees',
-    {
-      method: 'POST',
-      body: JSON.stringify(payload),
-      token
-    }
-  );
-  return response.data;
+  return apiRequest<Employee>('/api/admin/employees', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    token
+  });
 }
 
 export async function updateEmployee(
@@ -91,37 +82,25 @@ export async function updateEmployee(
   payload: UpdateEmployeePayload,
   token: string
 ): Promise<Employee> {
-  const response = await apiRequest<{ status: string; data: Employee }>(
-    `/api/admin/employees/${id}`,
-    {
-      method: 'PUT',
-      body: JSON.stringify(payload),
-      token
-    }
-  );
-  return response.data;
+  return apiRequest<Employee>(`/api/admin/employees/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+    token
+  });
 }
 
 export async function deactivateEmployee(id: string, token: string): Promise<Employee> {
-  const response = await apiRequest<{ status: string; data: Employee }>(
-    `/api/admin/employees/${id}/deactivate`,
-    {
-      method: 'POST',
-      token
-    }
-  );
-  return response.data;
+  return apiRequest<Employee>(`/api/admin/employees/${id}/deactivate`, {
+    method: 'POST',
+    token
+  });
 }
 
 export async function reactivateEmployee(id: string, token: string): Promise<Employee> {
-  const response = await apiRequest<{ status: string; data: Employee }>(
-    `/api/admin/employees/${id}/reactivate`,
-    {
-      method: 'POST',
-      token
-    }
-  );
-  return response.data;
+  return apiRequest<Employee>(`/api/admin/employees/${id}/reactivate`, {
+    method: 'POST',
+    token
+  });
 }
 
 export async function resetEmployeePin(
@@ -129,13 +108,9 @@ export async function resetEmployeePin(
   pin: string,
   token: string
 ): Promise<Employee> {
-  const response = await apiRequest<{ status: string; data: Employee }>(
-    `/api/admin/employees/${id}/reset-pin`,
-    {
-      method: 'POST',
-      body: JSON.stringify({ pin }),
-      token
-    }
-  );
-  return response.data;
+  return apiRequest<Employee>(`/api/admin/employees/${id}/reset-pin`, {
+    method: 'POST',
+    body: JSON.stringify({ pin }),
+    token
+  });
 }
