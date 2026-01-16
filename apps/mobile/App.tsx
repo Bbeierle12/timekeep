@@ -1,9 +1,12 @@
-import { useEffect, useState } from 'react';
-import { Platform, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { AuthProvider, useAuth } from './src/context/AuthContext';
+import AppNavigator from './src/navigation/AppNavigator';
 import { registerForPushNotificationsAsync } from './src/services/pushNotifications';
 import { registerPushToken } from './src/services/api';
 import { flushQueuedPunches } from './src/services/offlineQueue';
+import { Platform } from 'react-native';
 
 function getPlatformLabel() {
   if (Platform.OS === 'ios') return 'ios';
@@ -11,72 +14,44 @@ function getPlatformLabel() {
   return 'web';
 }
 
-export default function App() {
-  const [status, setStatus] = useState('Initializing');
+function AppContent() {
+  const { token } = useAuth();
 
   useEffect(() => {
-    let isMounted = true;
-
     async function initialize() {
       try {
-        const token = await registerForPushNotificationsAsync();
+        // Register for push notifications
+        const pushToken = await registerForPushNotificationsAsync();
+        if (pushToken) {
+          await registerPushToken(pushToken, getPlatformLabel());
+        }
+
+        // Flush any queued punches when we have a token
         if (token) {
-          await registerPushToken(token, getPlatformLabel());
+          await flushQueuedPunches(token);
         }
-        await flushQueuedPunches();
-        if (isMounted) {
-          setStatus('Ready');
-        }
-      } catch (error) {
-        if (isMounted) {
-          setStatus('Offline');
-        }
+      } catch {
+        // Silent fail for initialization errors
       }
     }
 
     initialize();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+  }, [token]);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <>
       <StatusBar style="light" />
-      <View style={styles.card}>
-        <Text style={styles.title}>Timekeep Mobile</Text>
-        <Text style={styles.subtitle}>Employee clock in/out and compliance</Text>
-        <Text style={styles.status}>Status: {status}</Text>
-      </View>
-    </SafeAreaView>
+      <AppNavigator />
+    </>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0f172a',
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  card: {
-    backgroundColor: '#111827',
-    padding: 24,
-    borderRadius: 16,
-    width: '90%'
-  },
-  title: {
-    color: '#f8fafc',
-    fontSize: 24,
-    fontWeight: '600'
-  },
-  subtitle: {
-    color: '#94a3b8',
-    marginTop: 8
-  },
-  status: {
-    color: '#38bdf8',
-    marginTop: 16
-  }
-});
+export default function App() {
+  return (
+    <SafeAreaProvider>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </SafeAreaProvider>
+  );
+}

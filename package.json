@@ -12,6 +12,13 @@
     "dev:server": "npm --workspace server run dev",
     "dev:mobile": "npm --workspace apps/mobile run start",
     "lint": "npm --workspaces run lint",
-    "test": "npm --workspaces run test"
+    "test": "npm --workspaces run test:run --if-present",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:headed": "playwright test --headed"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.11.0",
+    "@playwright/test": "^1.57.0"
   }
 }

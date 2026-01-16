@@ -259,5 +259,112 @@ export const authService = {
   async logout(params: { token: string }) {
     const tokenHash = hashToken(params.token);
     await pool.query('DELETE FROM sessions WHERE token_hash = $1', [tokenHash]);
+  },
+
+  async refreshToken(params: {
+    currentToken: string;
+    userId: string;
+    userType: 'ADMIN' | 'EMPLOYEE';
+    ipAddress?: string;
+    userAgent?: string;
+  }): Promise<AuthSuccess | AuthFailure> {
+    const settings = await getCompanySettings();
+    const now = new Date();
+    const currentTokenHash = hashToken(params.currentToken);
+
+    // Verify the current session exists and is valid
+    const sessionResult = await pool.query(
+      `SELECT id, expires_at FROM sessions
+       WHERE token_hash = $1 AND user_id = $2 AND user_type = $3`,
+      [currentTokenHash, params.userId, params.userType]
+    );
+
+    if (sessionResult.rowCount === 0) {
+      return { ok: false, status: 401, code: 'INVALID_SESSION', message: 'Invalid or expired session' };
+    }
+
+    const session = sessionResult.rows[0];
+
+    // Check if session is expired (allow some grace period for refresh)
+    const gracePeriodMs = 5 * 60 * 1000; // 5 minutes grace period
+    if (new Date(session.expires_at).getTime() + gracePeriodMs < now.getTime()) {
+      // Session too old, delete it
+      await pool.query('DELETE FROM sessions WHERE id = $1', [session.id]);
+      return { ok: false, status: 401, code: 'SESSION_EXPIRED', message: 'Session expired' };
+    }
+
+    // Get user details
+    let user: { id: string; name: string; initials?: string; role?: string };
+
+    if (params.userType === 'EMPLOYEE') {
+      const empResult = await pool.query(
+        'SELECT id, full_name, initials, is_active FROM employees WHERE id = $1',
+        [params.userId]
+      );
+      if (empResult.rowCount === 0 || !empResult.rows[0].is_active) {
+        await pool.query('DELETE FROM sessions WHERE id = $1', [session.id]);
+        return { ok: false, status: 403, code: 'USER_INACTIVE', message: 'User no longer active' };
+      }
+      user = { id: empResult.rows[0].id, name: empResult.rows[0].full_name, initials: empResult.rows[0].initials };
+    } else {
+      const adminResult = await pool.query(
+        'SELECT id, name, role, is_active FROM admins WHERE id = $1',
+        [params.userId]
+      );
+      if (adminResult.rowCount === 0 || !adminResult.rows[0].is_active) {
+        await pool.query('DELETE FROM sessions WHERE id = $1', [session.id]);
+        return { ok: false, status: 403, code: 'USER_INACTIVE', message: 'User no longer active' };
+      }
+      user = { id: adminResult.rows[0].id, name: adminResult.rows[0].name, role: adminResult.rows[0].role };
+    }
+
+    // Generate new token
+    const sessionDuration = params.userType === 'EMPLOYEE'
+      ? settings.session_duration_employee
+      : settings.session_duration_admin;
+
+    const expiresAt = new Date(now.getTime() + sessionDuration * 1000);
+    const newToken = signToken(
+      { sub: params.userId, type: params.userType, ...(user.role ? { role: user.role } : {}) },
+      sessionDuration
+    );
+    const newTokenHash = hashToken(newToken);
+
+    // Update session with new token
+    await pool.query(
+      `UPDATE sessions
+       SET token_hash = $1, expires_at = $2, ip_address = $3, user_agent = $4
+       WHERE id = $5`,
+      [newTokenHash, expiresAt, params.ipAddress ?? null, params.userAgent ?? null, session.id]
+    );
+
+    await auditService.log({
+      actorType: params.userType,
+      actorId: params.userId,
+      actorIdentifier: user.initials ?? user.name,
+      action: 'TOKEN_REFRESH',
+      ipAddress: params.ipAddress,
+      userAgent: params.userAgent
+    });
+
+    // For employees, also check for pending certification
+    let pendingCertification = null;
+    if (params.userType === 'EMPLOYEE') {
+      pendingCertification = await certificationService.getPendingCertification(params.userId);
+    }
+
+    return {
+      ok: true,
+      token: newToken,
+      expiresAt,
+      user: {
+        id: user.id,
+        type: params.userType,
+        name: user.name,
+        ...(user.initials ? { initials: user.initials } : {}),
+        ...(user.role ? { role: user.role } : {})
+      },
+      pendingCertification
+    };
   }
 };

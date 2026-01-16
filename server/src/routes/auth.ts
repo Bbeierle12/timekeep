@@ -76,8 +76,26 @@ router.post('/logout', requireAuth, async (req, res) => {
   res.json({ status: 'success' });
 });
 
-router.post('/refresh', (_req, res) => {
-  res.status(501).json({ status: 'error', message: 'Not implemented' });
+router.post('/refresh', requireAuth, async (req, res) => {
+  if (!req.token || !req.user) {
+    res.status(401).json({ status: 'error', message: 'Missing auth context' });
+    return;
+  }
+
+  const result = await authService.refreshToken({
+    currentToken: req.token,
+    userId: req.user.id,
+    userType: req.user.type,
+    ipAddress: req.ip,
+    userAgent: req.get('user-agent') ?? undefined
+  });
+
+  if (!result.ok) {
+    res.status(result.status).json({ status: 'error', message: result.message, code: result.code });
+    return;
+  }
+
+  res.json({ status: 'success', data: result });
 });
 
 router.post('/employee/change-pin', requireAuth, requireEmployee, async (req, res) => {

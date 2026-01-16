@@ -7,6 +7,8 @@ type OfflinePunch = {
   actionType: string;
   recordedAt: string;
   comment?: string;
+  latitude?: number;
+  longitude?: number;
 };
 
 async function loadQueue(): Promise<OfflinePunch[]> {
@@ -35,7 +37,16 @@ export async function flushQueuedPunches(authToken?: string) {
     return { flushed: 0 };
   }
 
-  await sendPunchBatch(queue, authToken);
-  await AsyncStorage.removeItem(STORAGE_KEY);
-  return { flushed: queue.length };
+  const result = await sendPunchBatch(queue, authToken);
+  if (result.status === 'success') {
+    await AsyncStorage.removeItem(STORAGE_KEY);
+    return { flushed: queue.length };
+  }
+
+  return { flushed: 0, error: result.message };
+}
+
+export async function getQueuedPunchCount(): Promise<number> {
+  const queue = await loadQueue();
+  return queue.length;
 }

@@ -8,7 +8,10 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "seed:admin": "tsx src/db/seeds/seed-admin.ts",
-    "lint": "echo \"No lint configured\""
+    "lint": "echo \"No lint configured\"",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -24,9 +27,12 @@
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
     "@types/jsonwebtoken": "^9.0.6",
-    "@types/pg": "^8.11.10",
     "@types/node": "^20.14.9",
+    "@types/pg": "^8.11.10",
+    "@types/supertest": "^6.0.3",
+    "supertest": "^7.2.2",
     "tsx": "^4.19.1",
-    "typescript": "^5.5.4"
+    "typescript": "^5.5.4",
+    "vitest": "^4.0.17"
   }
 }
