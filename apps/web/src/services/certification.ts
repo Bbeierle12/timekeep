@@ -20,14 +20,14 @@ export type CertifyPayload = {
 export async function fetchPendingCertification(
   token: string
 ): Promise<PendingCertification | null> {
-  return apiRequest<PendingCertification | null>('/api/certification/pending', { token });
+  return apiRequest<PendingCertification | null>('/api/certify/pending', { token });
 }
 
 export async function certifyDay(
   payload: CertifyPayload,
   token: string
 ): Promise<DailySummary> {
-  return apiRequest<DailySummary>('/api/certification', {
+  return apiRequest<DailySummary>('/api/certify', {
     method: 'POST',
     body: JSON.stringify(payload),
     token
