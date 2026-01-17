@@ -50,16 +50,17 @@ export const authService = {
     userAgent?: string;
   }): Promise<AuthSuccess | AuthFailure> {
     const settings = await getCompanySettings();
-    const initials = params.initials.trim().toUpperCase();
+    const identifier = params.initials.trim().toUpperCase();
     const now = new Date();
 
+    // Support login by either initials or employee_code
     const employeeResult = await pool.query(
-      `SELECT id, initials, full_name, pin_hash, is_active, access_status,
+      `SELECT id, initials, employee_code, full_name, pin_hash, is_active, access_status,
               failed_login_count, locked_until
        FROM employees
-       WHERE initials = $1
+       WHERE UPPER(initials) = $1 OR UPPER(employee_code) = $1
        LIMIT 1`,
-      [initials]
+      [identifier]
     );
 
     if (employeeResult.rowCount === 0) {

@@ -4,6 +4,7 @@ import { beforeAll, afterAll, afterEach, vi } from 'vitest';
 process.env.NODE_ENV = 'test';
 process.env.JWT_SECRET = 'test-jwt-secret-for-testing-only';
 process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/timekeep_test';
+process.env.CSRF_ENABLED = 'false';
 
 // Mock the database pool for unit tests
 vi.mock('../db/connection', () => ({

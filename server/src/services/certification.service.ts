@@ -32,10 +32,11 @@ function buildUpdate(fields: Record<string, unknown>) {
 
 export const certificationService = {
   async getPendingCertification(employeeId: string): Promise<PendingCertification | null> {
+    // Get the most recent uncertified day (for backward compatibility)
     const result = await pool.query(
       `SELECT work_date
        FROM daily_summaries
-       WHERE employee_id = $1 AND is_certified = FALSE
+       WHERE employee_id = $1 AND is_certified = FALSE AND clock_out_at IS NOT NULL
        ORDER BY work_date DESC
        LIMIT 1`,
       [employeeId]
@@ -50,6 +51,33 @@ export const certificationService = {
     const summary = await dailySummaryService.getSummary(employeeId, workDate);
 
     return { workDate, entries, summary };
+  },
+
+  async getAllPendingCertifications(employeeId: string): Promise<PendingCertification[]> {
+    // Get all uncertified days with completed shifts (clock_out_at is set)
+    const result = await pool.query(
+      `SELECT work_date
+       FROM daily_summaries
+       WHERE employee_id = $1 AND is_certified = FALSE AND clock_out_at IS NOT NULL
+       ORDER BY work_date ASC`,
+      [employeeId]
+    );
+
+    if (!result.rowCount) {
+      return [];
+    }
+
+    const pendingDays: PendingCertification[] = [];
+
+    for (const row of result.rows) {
+      const workDate = row.work_date as string;
+      const entries = await timeEntryService.getEntriesForEmployee(employeeId, workDate);
+      const summary = await dailySummaryService.getSummary(employeeId, workDate);
+
+      pendingDays.push({ workDate, entries, summary });
+    }
+
+    return pendingDays;
   },
 
   async certifyDay(input: CertifyInput) {

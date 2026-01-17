@@ -14,10 +14,23 @@ function getJwtSecret(): string {
   return secret;
 }
 
+function getCsrfSecret(): string {
+  const secret = process.env.CSRF_SECRET;
+  if (!secret) {
+    if (process.env.NODE_ENV === 'production') {
+      console.warn('WARNING: CSRF_SECRET not set in production. CSRF protection is disabled.');
+    }
+    return 'dev_csrf_secret_not_for_production';
+  }
+  return secret;
+}
+
 export const config = {
   port: Number(process.env.PORT ?? 4000),
   databaseUrl: process.env.DATABASE_URL ?? '',
   jwtSecret: getJwtSecret(),
+  csrfSecret: getCsrfSecret(),
   nodeEnv: process.env.NODE_ENV ?? 'development',
-  corsOrigins: process.env.CORS_ORIGINS?.split(',') ?? ['http://localhost:5173', 'http://localhost:3000']
+  corsOrigins: process.env.CORS_ORIGINS?.split(',') ?? ['http://localhost:5173', 'http://localhost:3000'],
+  csrfEnabled: process.env.CSRF_ENABLED !== 'false'
 };

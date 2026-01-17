@@ -1,9 +1,27 @@
-import { vi } from 'vitest';
+import { vi, type Mock } from 'vitest';
 import request from 'supertest';
+import type { QueryResult, QueryResultRow } from 'pg';
 import app from '../app';
 import { signToken } from '../utils/jwt';
+import { pool } from '../db/connection';
 
 export const testRequest = request(app);
+
+// Type helper for mocking pool.query with proper return type
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function mockQueryResult(rows: any[], rowCount?: number): QueryResult<any> {
+  return {
+    rows,
+    rowCount: rowCount ?? rows.length,
+    command: 'SELECT',
+    oid: 0,
+    fields: [],
+  };
+}
+
+// Type-safe mock for pool.query
+type QueryMock = Mock<(...args: unknown[]) => Promise<QueryResult>>;
+export const mockPoolQuery = pool.query as unknown as QueryMock;
 
 // Create test tokens
 export function createEmployeeToken(employeeId: string = 'test-employee-id') {

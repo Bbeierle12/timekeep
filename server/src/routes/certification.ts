@@ -25,6 +25,17 @@ router.get('/pending', requireAuth, requireEmployee, async (req, res) => {
   res.json({ status: 'success', data: pending });
 });
 
+router.get('/pending/all', requireAuth, requireEmployee, async (req, res) => {
+  const employeeId = req.user?.id;
+  if (!employeeId) {
+    res.status(401).json({ status: 'error', message: 'Missing auth context' });
+    return;
+  }
+
+  const pendingDays = await certificationService.getAllPendingCertifications(employeeId);
+  res.json({ status: 'success', data: pendingDays });
+});
+
 router.post('/', requireAuth, requireEmployee, async (req, res) => {
   const parsed = certifySchema.safeParse(req.body);
   if (!parsed.success) {

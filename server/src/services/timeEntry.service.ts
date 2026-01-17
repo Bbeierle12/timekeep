@@ -1,6 +1,10 @@
 import { pool } from '../db/connection';
-import { getCompanySettings } from './settings.service';
+import { getCompanySettings, CompanySettings } from './settings.service';
 import { dailySummaryService } from './dailySummary.service';
+import { attestationService } from './attestation.service';
+import { geofenceService } from './geofence.service';
+import { formatInTimeZone } from 'date-fns-tz';
+import { AttestationRequiredError } from '../errors/AttestationRequiredError';
 
 export type PunchInput = {
   employeeId: string;
@@ -9,6 +13,10 @@ export type PunchInput = {
     | 'CLOCK_OUT'
     | 'LUNCH_START'
     | 'LUNCH_END'
+    | 'SECOND_LUNCH_START'
+    | 'SECOND_LUNCH_END'
+    | 'THIRD_LUNCH_START'
+    | 'THIRD_LUNCH_END'
     | 'BREAK_ACK_1'
     | 'BREAK_ACK_2'
     | 'BREAK_ACK_3'
@@ -22,16 +30,127 @@ export type PunchInput = {
   gpsAccuracyMeters?: number | null;
   resolvedAddress?: string | null;
   gpsUnavailable?: boolean | null;
+  isOfflineSync?: boolean;
 };
 
-function getWorkDate(date: Date) {
-  return date.toISOString().slice(0, 10);
+const MAX_TIMESTAMP_DRIFT_MS = 5 * 60 * 1000; // 5 minutes
+const MAX_OFFLINE_SYNC_DRIFT_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+function validateTimestamp(clientTimestamp: Date, isOfflineSync: boolean = false): void {
+  const serverTime = new Date();
+  const drift = Math.abs(serverTime.getTime() - clientTimestamp.getTime());
+  const maxDrift = isOfflineSync ? MAX_OFFLINE_SYNC_DRIFT_MS : MAX_TIMESTAMP_DRIFT_MS;
+
+  if (drift > maxDrift) {
+    const driftMinutes = Math.round(drift / 60000);
+    throw new Error(
+      `Timestamp outside allowed window (${driftMinutes} minutes drift). ` +
+        `Max allowed: ${Math.round(maxDrift / 60000)} minutes.`
+    );
+  }
+}
+
+function getWorkDate(date: Date, settings: CompanySettings): string {
+  const timezone = settings.timezone || 'America/Los_Angeles';
+  return formatInTimeZone(date, timezone, 'yyyy-MM-dd');
+}
+
+/**
+ * For overnight shifts, we need to use the clock-in date as the work_date
+ * for all subsequent actions (lunch, breaks, clock-out)
+ */
+async function getWorkDateForAction(
+  employeeId: string,
+  actionType: string,
+  recordedAt: Date,
+  settings: CompanySettings
+): Promise<{ workDate: string; crossesMidnight: boolean }> {
+  const currentWorkDate = getWorkDate(recordedAt, settings);
+
+  // For CLOCK_IN, always use the current date
+  if (actionType === 'CLOCK_IN') {
+    return { workDate: currentWorkDate, crossesMidnight: false };
+  }
+
+  // For other actions, check if there's an active shift from a previous day
+  const activeShiftResult = await pool.query(
+    `SELECT work_date, clock_in_at
+     FROM daily_summaries
+     WHERE employee_id = $1 AND clock_out_at IS NULL
+     ORDER BY work_date DESC
+     LIMIT 1`,
+    [employeeId]
+  );
+
+  if (activeShiftResult.rows.length > 0) {
+    const activeWorkDate = activeShiftResult.rows[0].work_date;
+    const clockInAt = activeShiftResult.rows[0].clock_in_at;
+
+    // If the active shift's work_date is different from current, it's an overnight shift
+    if (activeWorkDate !== currentWorkDate) {
+      // Verify the clock-in was recent enough (within 24 hours) to be a valid overnight shift
+      const hoursSinceClockIn = (recordedAt.getTime() - new Date(clockInAt).getTime()) / (1000 * 60 * 60);
+      if (hoursSinceClockIn <= 24) {
+        return { workDate: activeWorkDate, crossesMidnight: true };
+      }
+    }
+
+    return { workDate: activeWorkDate, crossesMidnight: false };
+  }
+
+  // No active shift found, use current date
+  return { workDate: currentWorkDate, crossesMidnight: false };
+}
+
+/**
+ * Validates GPS data and returns whether it's suspicious
+ * Returns true if GPS data appears suspicious/fake
+ */
+function validateGpsData(
+  lat: number | null | undefined,
+  lng: number | null | undefined,
+  accuracy: number | null | undefined
+): boolean {
+  // No GPS data is not suspicious
+  if (lat === null || lat === undefined || lng === null || lng === undefined) {
+    return false;
+  }
+
+  // Invalid coordinate ranges
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    return true;
+  }
+
+  // Check accuracy if provided
+  if (accuracy !== null && accuracy !== undefined) {
+    // Suspiciously high accuracy (real GPS rarely below 3m)
+    if (accuracy < 1) {
+      return true;
+    }
+
+    // Impossibly large accuracy (>1km usually indicates fake data or cellular only)
+    if (accuracy > 1000) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 export const timeEntryService = {
   async recordPunch(input: PunchInput) {
-    const workDate = getWorkDate(input.recordedAt);
+    // Validate timestamp to prevent backdating
+    validateTimestamp(input.recordedAt, input.isOfflineSync ?? false);
+
     const settings = await getCompanySettings();
+    const { workDate, crossesMidnight } = await getWorkDateForAction(
+      input.employeeId,
+      input.actionType,
+      input.recordedAt,
+      settings
+    );
+    const serverReceivedAt = new Date();
+
     const entriesResult = await pool.query(
       `SELECT action_type, recorded_at
        FROM time_entries
@@ -46,6 +165,14 @@ export const timeEntryService = {
     const clockOut = entries.find((entry) => entry.action_type === 'CLOCK_OUT')?.recorded_at ?? null;
     const lunchStart = entries.find((entry) => entry.action_type === 'LUNCH_START')?.recorded_at ?? null;
     const lunchEnd = entries.find((entry) => entry.action_type === 'LUNCH_END')?.recorded_at ?? null;
+    const secondLunchStart =
+      entries.find((entry) => entry.action_type === 'SECOND_LUNCH_START')?.recorded_at ?? null;
+    const secondLunchEnd =
+      entries.find((entry) => entry.action_type === 'SECOND_LUNCH_END')?.recorded_at ?? null;
+    const thirdLunchStart =
+      entries.find((entry) => entry.action_type === 'THIRD_LUNCH_START')?.recorded_at ?? null;
+    const thirdLunchEnd =
+      entries.find((entry) => entry.action_type === 'THIRD_LUNCH_END')?.recorded_at ?? null;
 
     const breakMatch = input.actionType.match(/^BREAK_(ACK|SKIP)_(\d)$/);
 
@@ -56,6 +183,83 @@ export const timeEntryService = {
     if (input.actionType === 'CLOCK_OUT') {
       if (!clockIn) throw new Error('Clock in required before clock out');
       if (clockOut) throw new Error('Already clocked out for the day');
+
+      // Check waiver eligibility - if shift exceeds 6 hours, invalidate first meal waiver
+      const totalMinutes = Math.floor((input.recordedAt.getTime() - clockIn.getTime()) / 60000);
+      const SIX_HOURS_MINUTES = 360;
+      const TWELVE_HOURS_MINUTES = 720;
+      const FIVE_HOURS_MINUTES = 300;
+
+      if (totalMinutes > SIX_HOURS_MINUTES) {
+        // Invalidate first meal waiver if shift exceeded 6 hours
+        await pool.query(
+          `UPDATE waivers
+           SET is_invalid = TRUE, invalid_reason = 'Shift exceeded 6 hours'
+           WHERE employee_id = $1 AND work_date = $2 AND waiver_type = 'FIRST_MEAL_WAIVER'
+             AND is_revoked = FALSE AND is_invalid = FALSE`,
+          [input.employeeId, workDate]
+        );
+      }
+
+      if (totalMinutes > TWELVE_HOURS_MINUTES) {
+        // Invalidate second meal waiver if shift exceeded 12 hours
+        await pool.query(
+          `UPDATE waivers
+           SET is_invalid = TRUE, invalid_reason = 'Shift exceeded 12 hours'
+           WHERE employee_id = $1 AND work_date = $2 AND waiver_type = 'SECOND_MEAL_WAIVER'
+             AND is_revoked = FALSE AND is_invalid = FALSE`,
+          [input.employeeId, workDate]
+        );
+      }
+
+      // Check if employee is exempt from compliance tracking
+      const employeeResult = await pool.query(
+        'SELECT is_exempt FROM employees WHERE id = $1',
+        [input.employeeId]
+      );
+      const isExempt = employeeResult.rows[0]?.is_exempt ?? false;
+
+      // Check for meal violations and require attestation (non-exempt only)
+      if (!isExempt && totalMinutes >= FIVE_HOURS_MINUTES) {
+        // Check for valid waiver
+        const waiverResult = await pool.query(
+          `SELECT id FROM waivers
+           WHERE employee_id = $1 AND work_date = $2
+             AND waiver_type = 'FIRST_MEAL_WAIVER'
+             AND is_revoked = FALSE AND is_invalid = FALSE`,
+          [input.employeeId, workDate]
+        );
+        const hasValidWaiver = waiverResult.rows.length > 0;
+
+        // Detect violation type
+        let violationType: string | null = null;
+
+        if (!lunchStart && !hasValidWaiver) {
+          violationType = 'MISSED_LUNCH';
+        } else if (lunchStart) {
+          const minutesToLunch = Math.floor((lunchStart.getTime() - clockIn.getTime()) / 60000);
+          if (minutesToLunch >= FIVE_HOURS_MINUTES) {
+            violationType = 'LATE_LUNCH';
+          } else if (lunchEnd) {
+            const lunchMinutes = Math.floor((lunchEnd.getTime() - lunchStart.getTime()) / 60000);
+            if (lunchMinutes < settings.lunch_minimum_minutes) {
+              violationType = 'SHORT_LUNCH';
+            }
+          }
+        }
+
+        // If there's a violation, check for existing attestation
+        if (violationType) {
+          const existingAttestation = await attestationService.getExistingAttestation(
+            input.employeeId,
+            workDate
+          );
+
+          if (!existingAttestation) {
+            throw new AttestationRequiredError(violationType);
+          }
+        }
+      }
     }
 
     if (input.actionType === 'LUNCH_START') {
@@ -73,6 +277,42 @@ export const timeEntryService = {
       }
     }
 
+    if (input.actionType === 'SECOND_LUNCH_START') {
+      if (!clockIn) throw new Error('Clock in required before second lunch');
+      if (!lunchEnd) throw new Error('First lunch must be completed before second lunch');
+      if (secondLunchStart) throw new Error('Second lunch already started');
+      if (clockOut) throw new Error('Cannot start second lunch after clock out');
+    }
+
+    if (input.actionType === 'SECOND_LUNCH_END') {
+      if (!secondLunchStart) throw new Error('Second lunch has not started');
+      if (secondLunchEnd) throw new Error('Second lunch already ended');
+      const lunchMinutes = Math.floor(
+        (input.recordedAt.getTime() - secondLunchStart.getTime()) / 60000
+      );
+      if (lunchMinutes < settings.lunch_minimum_minutes) {
+        throw new Error('Second lunch duration below minimum');
+      }
+    }
+
+    if (input.actionType === 'THIRD_LUNCH_START') {
+      if (!clockIn) throw new Error('Clock in required before third lunch');
+      if (!secondLunchEnd) throw new Error('Second lunch must be completed before third lunch');
+      if (thirdLunchStart) throw new Error('Third lunch already started');
+      if (clockOut) throw new Error('Cannot start third lunch after clock out');
+    }
+
+    if (input.actionType === 'THIRD_LUNCH_END') {
+      if (!thirdLunchStart) throw new Error('Third lunch has not started');
+      if (thirdLunchEnd) throw new Error('Third lunch already ended');
+      const lunchMinutes = Math.floor(
+        (input.recordedAt.getTime() - thirdLunchStart.getTime()) / 60000
+      );
+      if (lunchMinutes < settings.lunch_minimum_minutes) {
+        throw new Error('Third lunch duration below minimum');
+      }
+    }
+
     if (breakMatch) {
       if (!clockIn) throw new Error('Clock in required before break');
       if (clockOut) throw new Error('Cannot take break after clock out');
@@ -87,13 +327,35 @@ export const timeEntryService = {
       }
     }
 
+    // Validate GPS data plausibility
+    const gpsSuspicious = validateGpsData(
+      input.gpsLatitude,
+      input.gpsLongitude,
+      input.gpsAccuracyMeters
+    );
+
+    // Check geofence
+    const geofenceResult = await geofenceService.validateLocation(
+      input.gpsLatitude,
+      input.gpsLongitude
+    );
+
+    // Block punch if outside geofence and enforcement is BLOCK
+    if (!geofenceResult.withinGeofence && geofenceResult.enforcement === 'BLOCK') {
+      throw new Error(
+        `Location is outside the allowed work area (${geofenceResult.distanceMeters}m from boundary)`
+      );
+    }
+
     const result = await pool.query(
       `INSERT INTO time_entries
        (employee_id, work_date, action_type, recorded_at, comment, gps_latitude,
-        gps_longitude, gps_accuracy_meters, resolved_address, gps_unavailable)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        gps_longitude, gps_accuracy_meters, resolved_address, gps_unavailable,
+        is_offline_sync, server_received_at, gps_suspicious, outside_geofence,
+        distance_from_geofence_meters)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
        RETURNING id, employee_id, work_date, action_type, recorded_at, comment,
-                 resolved_address`,
+                 resolved_address, is_offline_sync, gps_suspicious, outside_geofence`,
       [
         input.employeeId,
         workDate,
@@ -104,7 +366,12 @@ export const timeEntryService = {
         input.gpsLongitude ?? null,
         input.gpsAccuracyMeters ?? null,
         input.resolvedAddress ?? null,
-        input.gpsUnavailable ?? null
+        input.gpsUnavailable ?? null,
+        input.isOfflineSync ?? false,
+        serverReceivedAt,
+        gpsSuspicious,
+        !geofenceResult.withinGeofence,
+        geofenceResult.distanceMeters
       ]
     );
 

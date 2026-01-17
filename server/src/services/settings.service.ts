@@ -2,6 +2,7 @@ import { pool } from '../db/connection';
 
 export type CompanySettings = {
   company_name: string;
+  timezone: string;
   auth_method: string;
   pin_length: number;
   session_duration_employee: number;
@@ -47,6 +48,7 @@ export type SettingsUpdate = Partial<{
 
 const fallbackSettings: CompanySettings = {
   company_name: 'Timekeep',
+  timezone: 'America/Los_Angeles',
   auth_method: 'initials_pin',
   pin_length: 4,
   session_duration_employee: 43200,
@@ -64,7 +66,7 @@ const fallbackSettings: CompanySettings = {
 
 export async function getCompanySettings(): Promise<CompanySettings> {
   const result = await pool.query(
-    `SELECT company_name, auth_method, pin_length, session_duration_employee,
+    `SELECT company_name, timezone, auth_method, pin_length, session_duration_employee,
             session_duration_admin, failed_login_lockout_count,
             failed_login_lockout_minutes, mfa_required_admin,
             lunch_minimum_minutes, lunch_reminder_1_hours, lunch_reminder_2_hours,
@@ -76,7 +78,7 @@ export async function getCompanySettings(): Promise<CompanySettings> {
     const created = await pool.query(
       `INSERT INTO company_settings (company_name)
        VALUES ($1)
-       RETURNING company_name, auth_method, pin_length, session_duration_employee,
+       RETURNING company_name, timezone, auth_method, pin_length, session_duration_employee,
                  session_duration_admin, failed_login_lockout_count,
                  failed_login_lockout_minutes, mfa_required_admin,
                  lunch_minimum_minutes, lunch_reminder_1_hours, lunch_reminder_2_hours,

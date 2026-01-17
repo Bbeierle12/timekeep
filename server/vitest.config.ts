@@ -5,6 +5,11 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     setupFiles: ['./src/test/setup.ts'],
+    env: {
+      NODE_ENV: 'test',
+      JWT_SECRET: 'test-jwt-secret-for-testing-only',
+      CSRF_ENABLED: 'false',
+    },
     include: ['src/**/*.{test,spec}.ts'],
     coverage: {
       provider: 'v8',

@@ -17,6 +17,11 @@ const waiverSchema = z.object({
   resolvedAddress: z.string().optional()
 });
 
+const revokeSchema = z.object({
+  workDate: z.string().optional(),
+  waiverType: z.enum(['FIRST_MEAL_WAIVER', 'SECOND_MEAL_WAIVER']).optional()
+});
+
 router.post('/', requireAuth, requireEmployee, async (req, res) => {
   const parsed = waiverSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -60,6 +65,69 @@ router.post('/', requireAuth, requireEmployee, async (req, res) => {
     });
 
     res.status(201).json({ status: 'success', data: waiver });
+  } catch (error) {
+    res.status(400).json({ status: 'error', message: (error as Error).message });
+  }
+});
+
+router.post('/revoke', requireAuth, requireEmployee, async (req, res) => {
+  const parsed = revokeSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ status: 'error', message: 'Invalid payload' });
+    return;
+  }
+
+  const employeeId = req.user?.id;
+  if (!employeeId) {
+    res.status(401).json({ status: 'error', message: 'Missing auth context' });
+    return;
+  }
+
+  const workDate = parsed.data.workDate ?? new Date().toISOString().slice(0, 10);
+
+  try {
+    const revokedWaivers = await waiverService.revoke(
+      employeeId,
+      workDate,
+      parsed.data.waiverType
+    );
+
+    for (const waiver of revokedWaivers) {
+      await auditService.log({
+        actorType: 'EMPLOYEE',
+        actorId: employeeId,
+        actorIdentifier: req.user?.id,
+        action: 'WAIVER_REVOKED',
+        targetType: 'WAIVER',
+        targetId: waiver.id,
+        details: { waiverType: waiver.waiver_type },
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent') ?? undefined
+      });
+    }
+
+    res.json({
+      status: 'success',
+      message: 'Waiver revoked successfully',
+      data: revokedWaivers
+    });
+  } catch (error) {
+    res.status(404).json({ status: 'error', message: (error as Error).message });
+  }
+});
+
+router.get('/active', requireAuth, requireEmployee, async (req, res) => {
+  const employeeId = req.user?.id;
+  if (!employeeId) {
+    res.status(401).json({ status: 'error', message: 'Missing auth context' });
+    return;
+  }
+
+  const workDate = (req.query.workDate as string) ?? new Date().toISOString().slice(0, 10);
+
+  try {
+    const waivers = await waiverService.getActiveWaivers(employeeId, workDate);
+    res.json({ status: 'success', data: waivers });
   } catch (error) {
     res.status(400).json({ status: 'error', message: (error as Error).message });
   }

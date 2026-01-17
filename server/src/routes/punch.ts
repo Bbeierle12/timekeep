@@ -4,6 +4,7 @@ import { requireAuth } from '../middleware/auth';
 import { requireEmployee } from '../middleware/employeeAuth';
 import { timeEntryService } from '../services/timeEntry.service';
 import { auditService } from '../services/audit.service';
+import { AttestationRequiredError } from '../errors/AttestationRequiredError';
 
 const router = Router();
 
@@ -13,6 +14,10 @@ const punchSchema = z.object({
     'CLOCK_OUT',
     'LUNCH_START',
     'LUNCH_END',
+    'SECOND_LUNCH_START',
+    'SECOND_LUNCH_END',
+    'THIRD_LUNCH_START',
+    'THIRD_LUNCH_END',
     'BREAK_ACK_1',
     'BREAK_ACK_2',
     'BREAK_ACK_3',
@@ -62,6 +67,15 @@ router.post('/', requireAuth, requireEmployee, async (req, res) => {
       gpsUnavailable: parsed.data.gpsUnavailable
     });
   } catch (error) {
+    if (error instanceof AttestationRequiredError) {
+      res.status(400).json({
+        status: 'error',
+        code: error.code,
+        message: error.message,
+        violationType: error.violationType
+      });
+      return;
+    }
     res.status(400).json({ status: 'error', message: (error as Error).message });
     return;
   }
@@ -118,6 +132,15 @@ router.post('/batch', requireAuth, requireEmployee, async (req, res) => {
 
     res.json({ status: 'success', data: entries });
   } catch (error) {
+    if (error instanceof AttestationRequiredError) {
+      res.status(400).json({
+        status: 'error',
+        code: error.code,
+        message: error.message,
+        violationType: error.violationType
+      });
+      return;
+    }
     res.status(400).json({ status: 'error', message: (error as Error).message });
   }
 });

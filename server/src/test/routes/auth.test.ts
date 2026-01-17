@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { testRequest, mockEmployee, mockDbResponse, mockSettings } from '../helpers';
-import { pool } from '../../db/connection';
+import { testRequest, mockEmployee, mockQueryResult, mockPoolQuery } from '../helpers';
 import * as hashUtils from '../../utils/hash';
 
 // Mock the hash verification
@@ -36,7 +35,7 @@ describe('Auth Routes', () => {
     });
 
     it('returns 401 for non-existent employee', async () => {
-      vi.mocked(pool.query).mockResolvedValueOnce(mockDbResponse([]));
+      mockPoolQuery.mockResolvedValueOnce(mockQueryResult([]));
 
       const response = await testRequest
         .post('/api/auth/employee/login')
@@ -47,8 +46,8 @@ describe('Auth Routes', () => {
     });
 
     it('returns 403 for inactive employee', async () => {
-      vi.mocked(pool.query).mockResolvedValueOnce(
-        mockDbResponse([{ ...mockEmployee, is_active: false }])
+      mockPoolQuery.mockResolvedValueOnce(
+        mockQueryResult([{ ...mockEmployee, is_active: false }])
       );
 
       const response = await testRequest
@@ -60,8 +59,8 @@ describe('Auth Routes', () => {
     });
 
     it('returns 403 for pending access employee', async () => {
-      vi.mocked(pool.query).mockResolvedValueOnce(
-        mockDbResponse([{ ...mockEmployee, access_status: 'PENDING' }])
+      mockPoolQuery.mockResolvedValueOnce(
+        mockQueryResult([{ ...mockEmployee, access_status: 'PENDING' }])
       );
 
       const response = await testRequest
@@ -73,8 +72,8 @@ describe('Auth Routes', () => {
     });
 
     it('returns 403 for locked account', async () => {
-      vi.mocked(pool.query).mockResolvedValueOnce(
-        mockDbResponse([{
+      mockPoolQuery.mockResolvedValueOnce(
+        mockQueryResult([{
           ...mockEmployee,
           locked_until: new Date(Date.now() + 3600000).toISOString(),
         }])
@@ -89,9 +88,9 @@ describe('Auth Routes', () => {
     });
 
     it('returns 401 for invalid PIN', async () => {
-      vi.mocked(pool.query).mockResolvedValueOnce(mockDbResponse([mockEmployee]));
+      mockPoolQuery.mockResolvedValueOnce(mockQueryResult([mockEmployee]));
       vi.mocked(hashUtils.verifyPassword).mockResolvedValueOnce(false);
-      vi.mocked(pool.query).mockResolvedValueOnce(mockDbResponse([])); // Update failed count
+      mockPoolQuery.mockResolvedValueOnce(mockQueryResult([])); // Update failed count
 
       const response = await testRequest
         .post('/api/auth/employee/login')
@@ -102,12 +101,12 @@ describe('Auth Routes', () => {
     });
 
     it('returns token for valid credentials', async () => {
-      vi.mocked(pool.query)
-        .mockResolvedValueOnce(mockDbResponse([mockEmployee])) // Get employee
-        .mockResolvedValueOnce(mockDbResponse([])) // Update login time
-        .mockResolvedValueOnce(mockDbResponse([])) // Insert session
-        .mockResolvedValueOnce(mockDbResponse([])) // Audit log
-        .mockResolvedValueOnce(mockDbResponse([])); // Get pending certification
+      mockPoolQuery
+        .mockResolvedValueOnce(mockQueryResult([mockEmployee])) // Get employee
+        .mockResolvedValueOnce(mockQueryResult([])) // Update login time
+        .mockResolvedValueOnce(mockQueryResult([])) // Insert session
+        .mockResolvedValueOnce(mockQueryResult([])) // Audit log
+        .mockResolvedValueOnce(mockQueryResult([])); // Get pending certification
 
       vi.mocked(hashUtils.verifyPassword).mockResolvedValueOnce(true);
 

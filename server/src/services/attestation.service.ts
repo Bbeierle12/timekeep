@@ -1,5 +1,10 @@
 import { pool } from '../db/connection';
-import { ATTESTATION_TEXT, ATTESTATION_TEXT_VERSION } from '../config/waiver-text';
+import {
+  ATTESTATION_TEXT_VERSION,
+  ATTESTATION_OPTION_A_TEXT,
+  ATTESTATION_OPTION_A_SUBOPTIONS,
+  ATTESTATION_OPTION_B_TEXT
+} from '../config/waiver-text';
 import { getCompanySettings } from './settings.service';
 import { dailySummaryService } from './dailySummary.service';
 
@@ -16,6 +21,17 @@ export type AttestationInput = {
 };
 
 export const attestationService = {
+  async getExistingAttestation(employeeId: string, workDate: string) {
+    const result = await pool.query(
+      `SELECT id, attestation_type, selected_option, signed_at
+       FROM attestations
+       WHERE employee_id = $1 AND work_date = $2`,
+      [employeeId, workDate]
+    );
+
+    return result.rows.length > 0 ? result.rows[0] : null;
+  },
+
   async sign(input: AttestationInput) {
     if (!input.signatureImage) {
       throw new Error('Signature is required');
@@ -48,7 +64,7 @@ export const attestationService = {
 
     if (!attestationType && clockIn && lunchStart) {
       const minutesToLunch = Math.floor((lunchStart.getTime() - clockIn.getTime()) / 60000);
-      if (minutesToLunch > 300) {
+      if (minutesToLunch >= 300) {
         attestationType = 'LATE_MEAL';
       }
     }
@@ -62,6 +78,17 @@ export const attestationService = {
 
     if (!attestationType) {
       throw new Error('No meal compliance issue found for attestation');
+    }
+
+    // Check for existing attestation (prevents duplicates)
+    const existingResult = await pool.query(
+      `SELECT id FROM attestations
+       WHERE employee_id = $1 AND work_date = $2 AND attestation_type = $3`,
+      [input.employeeId, input.workDate, attestationType]
+    );
+
+    if (existingResult.rows.length > 0) {
+      throw new Error('An attestation has already been submitted for this violation type today');
     }
 
     const signedAt = new Date();
@@ -97,6 +124,20 @@ export const attestationService = {
       await dailySummaryService.flagPremiumPay(input.employeeId, input.workDate, true);
     }
 
-    return { ...result.rows[0], attestation_text: ATTESTATION_TEXT };
+    const attestationText =
+      input.selectedOption === 'OPTION_B'
+        ? ATTESTATION_OPTION_B_TEXT
+        : ATTESTATION_OPTION_A_TEXT;
+
+    const suboption =
+      input.selectedOption === 'OPTION_A' && input.optionASuboption
+        ? ATTESTATION_OPTION_A_SUBOPTIONS[input.optionASuboption]
+        : null;
+
+    return {
+      ...result.rows[0],
+      attestation_text: attestationText,
+      option_a_suboption_text: suboption
+    };
   }
 };

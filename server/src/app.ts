@@ -1,8 +1,10 @@
 import express, { type Request, type Response, type NextFunction } from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import routes from './routes';
 import { config } from './config';
-import { rateLimiter } from './middleware/rateLimiter';
+import { globalRateLimiter, loginRateLimiter } from './middleware/rateLimiter';
+import { csrfProtection, getCsrfToken, invalidCsrfTokenError } from './middleware/csrf';
 
 const app = express();
 
@@ -25,9 +27,19 @@ app.use(cors({
 }));
 
 app.use(express.json());
+app.use(cookieParser());
 
-// Apply rate limiting to auth routes
-app.use('/api/auth', rateLimiter);
+// Apply stricter rate limiting to login endpoints (20 requests per 15 minutes per IP)
+app.use('/api/auth/login', loginRateLimiter);
+
+// Apply global rate limiting to all API endpoints (100 requests per 15 minutes per IP)
+app.use('/api', globalRateLimiter);
+
+// CSRF token endpoint (must be before CSRF protection)
+app.get('/api/csrf-token', getCsrfToken);
+
+// Apply CSRF protection to state-changing API requests
+app.use('/api', csrfProtection);
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
@@ -37,6 +49,16 @@ app.use('/api', routes);
 
 // Global error handler
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
+  // Handle CSRF errors
+  if (err === invalidCsrfTokenError) {
+    res.status(403).json({
+      status: 'error',
+      code: 'CSRF_ERROR',
+      message: 'Invalid or missing CSRF token'
+    });
+    return;
+  }
+
   console.error('Unhandled error:', err);
   res.status(500).json({
     status: 'error',
