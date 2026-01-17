@@ -13,10 +13,14 @@ import {
   approveCorrection,
   rejectCorrection,
   applyCorrection,
+  updateEntry,
+  createEntry,
   TimeEntry,
-  Correction
+  Correction,
+  UpdateEntryPayload,
+  CreateEntryPayload
 } from '../../services/entries';
-import { listEmployees, Employee } from '../../services/employees';
+import { listEmployees } from '../../services/employees';
 
 const entryTypeLabels: Record<string, string> = {
   CLOCK_IN: 'Clock In',
@@ -44,6 +48,23 @@ export default function AdminTimeEntries() {
   const [activeTab, setActiveTab] = useState<'entries' | 'corrections'>('entries');
   const [selectedCorrection, setSelectedCorrection] = useState<Correction | null>(null);
   const [rejectReason, setRejectReason] = useState('');
+
+  // Edit/Create entry state
+  const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editForm, setEditForm] = useState({
+    recordedAt: '',
+    comment: '',
+    reason: ''
+  });
+  const [createForm, setCreateForm] = useState({
+    employeeId: '',
+    workDate: '',
+    actionType: 'CLOCK_IN' as string,
+    recordedAt: '',
+    comment: '',
+    reason: ''
+  });
 
   // Filters
   const [dateFilter, setDateFilter] = useState(
@@ -98,6 +119,74 @@ export default function AdminTimeEntries() {
       setSelectedCorrection(null);
     }
   });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: UpdateEntryPayload }) =>
+      updateEntry(id, payload, token!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['entries'] });
+      setEditingEntry(null);
+      setEditForm({ recordedAt: '', comment: '', reason: '' });
+    }
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (payload: CreateEntryPayload) => createEntry(payload, token!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['entries'] });
+      setShowCreateModal(false);
+      setCreateForm({
+        employeeId: '',
+        workDate: '',
+        actionType: 'CLOCK_IN',
+        recordedAt: '',
+        comment: '',
+        reason: ''
+      });
+    }
+  });
+
+  const handleEditEntry = (entry: TimeEntry) => {
+    const date = new Date(entry.timestamp);
+    setEditForm({
+      recordedAt: date.toISOString().slice(0, 16),
+      comment: entry.comment || '',
+      reason: ''
+    });
+    setEditingEntry(entry);
+  };
+
+  const handleSaveEdit = () => {
+    if (!editingEntry || !editForm.reason.trim()) return;
+
+    const payload: UpdateEntryPayload = {
+      reason: editForm.reason.trim()
+    };
+
+    if (editForm.recordedAt) {
+      payload.recordedAt = new Date(editForm.recordedAt).toISOString();
+    }
+    if (editForm.comment !== (editingEntry.comment || '')) {
+      payload.comment = editForm.comment || null;
+    }
+
+    updateMutation.mutate({ id: editingEntry.id, payload });
+  };
+
+  const handleCreateEntry = () => {
+    if (!createForm.employeeId || !createForm.workDate || !createForm.recordedAt || !createForm.reason.trim()) {
+      return;
+    }
+
+    createMutation.mutate({
+      employeeId: createForm.employeeId,
+      workDate: createForm.workDate,
+      actionType: createForm.actionType,
+      recordedAt: new Date(createForm.recordedAt).toISOString(),
+      comment: createForm.comment || undefined,
+      reason: createForm.reason.trim()
+    });
+  };
 
   // Group entries by employee
   const groupedEntries = useMemo(() => {
@@ -196,6 +285,18 @@ export default function AdminTimeEntries() {
               >
                 Today
               </Button>
+              <Button
+                onClick={() => {
+                  setCreateForm({
+                    ...createForm,
+                    workDate: dateFilter,
+                    recordedAt: `${dateFilter}T09:00`
+                  });
+                  setShowCreateModal(true);
+                }}
+              >
+                + Add Entry
+              </Button>
             </div>
           </div>
 
@@ -220,7 +321,7 @@ export default function AdminTimeEntries() {
                       {empEntries
                         .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
                         .map((entry) => (
-                          <EntryRow key={entry.id} entry={entry} />
+                          <EntryRow key={entry.id} entry={entry} onEdit={handleEditEntry} />
                         ))}
                     </div>
                   </div>
@@ -340,21 +441,237 @@ export default function AdminTimeEntries() {
           </div>
         )}
       </Modal>
+
+      {/* Edit Entry Modal */}
+      <Modal
+        isOpen={!!editingEntry}
+        onClose={() => {
+          setEditingEntry(null);
+          setEditForm({ recordedAt: '', comment: '', reason: '' });
+        }}
+        title="Edit Time Entry"
+      >
+        {editingEntry && (
+          <div className="space-y-4">
+            <div className="p-3 bg-slate-800/50 rounded-lg">
+              <p className="text-sm text-slate-400">
+                Editing {entryTypeLabels[editingEntry.entry_type] || editingEntry.entry_type} for{' '}
+                {editingEntry.employee_name || 'employee'}
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">Time</label>
+              <Input
+                type="datetime-local"
+                value={editForm.recordedAt}
+                onChange={(e) => setEditForm({ ...editForm, recordedAt: e.target.value })}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">Comment</label>
+              <Input
+                value={editForm.comment}
+                onChange={(e) => setEditForm({ ...editForm, comment: e.target.value })}
+                placeholder="Optional comment"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">
+                Reason for Edit <span className="text-red-400">*</span>
+              </label>
+              <Input
+                value={editForm.reason}
+                onChange={(e) => setEditForm({ ...editForm, reason: e.target.value })}
+                placeholder="Why is this entry being changed?"
+              />
+            </div>
+
+            {updateMutation.isError && (
+              <p className="text-red-400 text-sm">Failed to update entry. Please try again.</p>
+            )}
+
+            <div className="flex gap-3 pt-2">
+              <Button
+                variant="secondary"
+                className="flex-1"
+                onClick={() => {
+                  setEditingEntry(null);
+                  setEditForm({ recordedAt: '', comment: '', reason: '' });
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="flex-1"
+                onClick={handleSaveEdit}
+                disabled={!editForm.reason.trim() || updateMutation.isPending}
+              >
+                {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Create Entry Modal */}
+      <Modal
+        isOpen={showCreateModal}
+        onClose={() => {
+          setShowCreateModal(false);
+          setCreateForm({
+            employeeId: '',
+            workDate: '',
+            actionType: 'CLOCK_IN',
+            recordedAt: '',
+            comment: '',
+            reason: ''
+          });
+        }}
+        title="Create Manual Entry"
+      >
+        <div className="space-y-4">
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
+            <p className="text-sm text-amber-400">
+              Manual entries are audit-logged and should only be created to correct missing punches.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1">
+              Employee <span className="text-red-400">*</span>
+            </label>
+            <select
+              value={createForm.employeeId}
+              onChange={(e) => setCreateForm({ ...createForm, employeeId: e.target.value })}
+              className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-sky-500"
+            >
+              <option value="">Select employee...</option>
+              {employees?.map((emp) => (
+                <option key={emp.id} value={emp.id}>
+                  {emp.full_name} ({emp.initials})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1">
+              Entry Type <span className="text-red-400">*</span>
+            </label>
+            <select
+              value={createForm.actionType}
+              onChange={(e) => setCreateForm({ ...createForm, actionType: e.target.value })}
+              className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-sky-500"
+            >
+              <option value="CLOCK_IN">Clock In</option>
+              <option value="CLOCK_OUT">Clock Out</option>
+              <option value="LUNCH_START">Lunch Start</option>
+              <option value="LUNCH_END">Lunch End</option>
+              <option value="BREAK_ACK_1">Break 1 Taken</option>
+              <option value="BREAK_ACK_2">Break 2 Taken</option>
+              <option value="BREAK_ACK_3">Break 3 Taken</option>
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">
+                Work Date <span className="text-red-400">*</span>
+              </label>
+              <Input
+                type="date"
+                value={createForm.workDate}
+                onChange={(e) => setCreateForm({ ...createForm, workDate: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">
+                Time <span className="text-red-400">*</span>
+              </label>
+              <Input
+                type="datetime-local"
+                value={createForm.recordedAt}
+                onChange={(e) => setCreateForm({ ...createForm, recordedAt: e.target.value })}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1">Comment</label>
+            <Input
+              value={createForm.comment}
+              onChange={(e) => setCreateForm({ ...createForm, comment: e.target.value })}
+              placeholder="Optional comment"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1">
+              Reason <span className="text-red-400">*</span>
+            </label>
+            <Input
+              value={createForm.reason}
+              onChange={(e) => setCreateForm({ ...createForm, reason: e.target.value })}
+              placeholder="Why is this entry being created?"
+            />
+          </div>
+
+          {createMutation.isError && (
+            <p className="text-red-400 text-sm">Failed to create entry. Please try again.</p>
+          )}
+
+          <div className="flex gap-3 pt-2">
+            <Button
+              variant="secondary"
+              className="flex-1"
+              onClick={() => {
+                setShowCreateModal(false);
+                setCreateForm({
+                  employeeId: '',
+                  workDate: '',
+                  actionType: 'CLOCK_IN',
+                  recordedAt: '',
+                  comment: '',
+                  reason: ''
+                });
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="flex-1"
+              onClick={handleCreateEntry}
+              disabled={
+                !createForm.employeeId ||
+                !createForm.workDate ||
+                !createForm.recordedAt ||
+                !createForm.reason.trim() ||
+                createMutation.isPending
+              }
+            >
+              {createMutation.isPending ? 'Creating...' : 'Create Entry'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </AdminLayout>
   );
 }
 
-function EntryRow({ entry }: { entry: TimeEntry }) {
+function EntryRow({ entry, onEdit }: { entry: TimeEntry; onEdit: (entry: TimeEntry) => void }) {
   const time = new Date(entry.timestamp).toLocaleTimeString('en-US', {
     hour: '2-digit',
     minute: '2-digit'
   });
 
   return (
-    <div className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-slate-800/30">
+    <div className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-slate-800/30 group">
       <div className="flex items-center gap-3">
-        <span className={`px-2 py-0.5 rounded text-xs font-medium ${entryTypeColors[entry.entry_type]}`}>
-          {entryTypeLabels[entry.entry_type]}
+        <span className={`px-2 py-0.5 rounded text-xs font-medium ${entryTypeColors[entry.entry_type] || 'bg-slate-500/20 text-slate-400'}`}>
+          {entryTypeLabels[entry.entry_type] || entry.entry_type}
         </span>
         <span className="text-white font-mono">{time}</span>
         {entry.is_corrected && (
@@ -372,6 +689,12 @@ function EntryRow({ entry }: { entry: TimeEntry }) {
             GPS
           </span>
         )}
+        <button
+          onClick={() => onEdit(entry)}
+          className="text-sm text-sky-400 hover:text-sky-300 opacity-0 group-hover:opacity-100 transition-opacity"
+        >
+          Edit
+        </button>
       </div>
     </div>
   );

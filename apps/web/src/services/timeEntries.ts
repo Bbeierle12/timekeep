@@ -86,3 +86,73 @@ export async function recordPunch(punch: PunchInput, token: string): Promise<Tim
 export async function fetchHistory(token: string, limit = 100): Promise<TimeEntry[]> {
   return apiRequest<TimeEntry[]>(`/api/history?limit=${limit}`, { token });
 }
+
+// Admin time entry functions
+export type AdminTimeEntry = TimeEntry & {
+  employee_id: string;
+  initials: string;
+  full_name: string;
+  original_recorded_at?: string | null;
+  original_comment?: string | null;
+  corrected_at?: string | null;
+  corrected_by?: string | null;
+  correction_reason?: string | null;
+  is_manual_entry?: boolean;
+};
+
+export type UpdateEntryPayload = {
+  recordedAt?: string;
+  comment?: string | null;
+  reason: string;
+};
+
+export type CreateEntryPayload = {
+  employeeId: string;
+  workDate: string;
+  actionType: string;
+  recordedAt: string;
+  comment?: string;
+  reason: string;
+};
+
+export async function fetchAdminEntries(token: string, limit = 200): Promise<AdminTimeEntry[]> {
+  return apiRequest<AdminTimeEntry[]>(`/api/admin/entries?limit=${limit}`, { token });
+}
+
+export async function fetchEntriesForDate(date: string, token: string): Promise<AdminTimeEntry[]> {
+  return apiRequest<AdminTimeEntry[]>(`/api/admin/entries/daily/${date}`, { token });
+}
+
+export async function fetchEntriesForEmployee(
+  employeeId: string,
+  token: string,
+  date?: string
+): Promise<AdminTimeEntry[]> {
+  const query = date ? `?date=${date}` : '';
+  return apiRequest<AdminTimeEntry[]>(`/api/admin/entries/employee/${employeeId}${query}`, {
+    token
+  });
+}
+
+export async function updateTimeEntry(
+  id: string,
+  payload: UpdateEntryPayload,
+  token: string
+): Promise<AdminTimeEntry> {
+  return apiRequest<AdminTimeEntry>(`/api/admin/entries/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+    token
+  });
+}
+
+export async function createTimeEntry(
+  payload: CreateEntryPayload,
+  token: string
+): Promise<AdminTimeEntry> {
+  return apiRequest<AdminTimeEntry>('/api/admin/entries', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    token
+  });
+}

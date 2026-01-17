@@ -20,7 +20,7 @@ ALTER TABLE time_entries ALTER COLUMN comment TYPE VARCHAR(500);
 ALTER TABLE daily_summaries ALTER COLUMN certification_comment TYPE VARCHAR(500);
 ALTER TABLE daily_summaries ALTER COLUMN correction_request_note TYPE VARCHAR(1000);
 ALTER TABLE attestations ALTER COLUMN comment TYPE VARCHAR(1000);
-ALTER TABLE waivers ALTER COLUMN comment TYPE VARCHAR(500);
+-- Note: waivers table doesn't have a comment column in the initial schema
 
 -- 3.8 Add REST break duration tracking table
 CREATE TABLE IF NOT EXISTS rest_breaks (

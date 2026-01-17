@@ -68,3 +68,34 @@ export function toUser(apiUser: LoginResponse['user']): User {
     role: apiUser.role
   };
 }
+
+// Password Reset Functions
+export type ForgotPasswordResponse = {
+  message: string;
+  token?: string; // Only in development
+};
+
+export type ValidateTokenResponse = {
+  valid: boolean;
+};
+
+export async function requestPasswordReset(email: string): Promise<ForgotPasswordResponse> {
+  return apiRequest<ForgotPasswordResponse>('/api/auth/admin/forgot-password', {
+    method: 'POST',
+    body: JSON.stringify({ email })
+  });
+}
+
+export async function validateResetToken(token: string): Promise<ValidateTokenResponse> {
+  return apiRequest<ValidateTokenResponse>('/api/auth/admin/validate-reset-token', {
+    method: 'POST',
+    body: JSON.stringify({ token })
+  });
+}
+
+export async function resetPassword(token: string, newPassword: string): Promise<{ message: string }> {
+  return apiRequest<{ message: string }>('/api/auth/admin/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({ token, newPassword })
+  });
+}

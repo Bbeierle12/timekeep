@@ -4,6 +4,7 @@ import { authService } from '../services/auth.service';
 import { requireAuth } from '../middleware/auth';
 import { requireEmployee } from '../middleware/employeeAuth';
 import { employeeService } from '../services/employee.service';
+import { passwordResetService } from '../services/passwordReset.service';
 
 const router = Router();
 
@@ -20,6 +21,19 @@ const adminLoginSchema = z.object({
 const changePinSchema = z.object({
   currentPin: z.string().min(4),
   newPin: z.string().min(4)
+});
+
+const forgotPasswordSchema = z.object({
+  email: z.string().email()
+});
+
+const resetPasswordSchema = z.object({
+  token: z.string().min(1),
+  newPassword: z.string().min(8)
+});
+
+const validateTokenSchema = z.object({
+  token: z.string().min(1)
 });
 
 router.post('/employee/login', async (req, res) => {
@@ -121,12 +135,74 @@ router.post('/employee/change-pin', requireAuth, requireEmployee, async (req, re
   res.json({ status: 'success' });
 });
 
-router.post('/admin/forgot-password', (_req, res) => {
-  res.status(501).json({ status: 'error', message: 'Not implemented' });
+router.post('/admin/forgot-password', async (req, res) => {
+  const parsed = forgotPasswordSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ status: 'error', message: 'Valid email is required' });
+    return;
+  }
+
+  try {
+    const result = await passwordResetService.requestReset(parsed.data.email);
+
+    // Always return success to prevent email enumeration
+    res.json({
+      status: 'success',
+      message: result.message,
+      // Include token only in development for testing
+      ...(process.env.NODE_ENV === 'development' && result.token ? { token: result.token } : {})
+    });
+  } catch (error) {
+    console.error('Password reset request error:', error);
+    res.status(500).json({ status: 'error', message: 'An error occurred processing your request' });
+  }
 });
 
-router.post('/admin/reset-password', (_req, res) => {
-  res.status(501).json({ status: 'error', message: 'Not implemented' });
+router.post('/admin/validate-reset-token', async (req, res) => {
+  const parsed = validateTokenSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ status: 'error', message: 'Token is required' });
+    return;
+  }
+
+  try {
+    const result = await passwordResetService.validateToken(parsed.data.token);
+    res.json({
+      status: 'success',
+      data: { valid: result.valid }
+    });
+  } catch (error) {
+    console.error('Token validation error:', error);
+    res.status(500).json({ status: 'error', message: 'An error occurred validating the token' });
+  }
+});
+
+router.post('/admin/reset-password', async (req, res) => {
+  const parsed = resetPasswordSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({
+      status: 'error',
+      message: 'Token and password (min 8 characters) are required'
+    });
+    return;
+  }
+
+  try {
+    const result = await passwordResetService.resetPassword(
+      parsed.data.token,
+      parsed.data.newPassword
+    );
+
+    if (!result.success) {
+      res.status(400).json({ status: 'error', message: result.message });
+      return;
+    }
+
+    res.json({ status: 'success', message: result.message });
+  } catch (error) {
+    console.error('Password reset error:', error);
+    res.status(500).json({ status: 'error', message: 'An error occurred resetting your password' });
+  }
 });
 
 export default router;

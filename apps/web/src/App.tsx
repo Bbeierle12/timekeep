@@ -11,6 +11,8 @@ const EmployeeHistory = lazy(() => import('./pages/employee/History'));
 const ChangePin = lazy(() => import('./pages/employee/ChangePin'));
 
 const AdminLogin = lazy(() => import('./pages/admin/Login'));
+const AdminForgotPassword = lazy(() => import('./pages/admin/ForgotPassword'));
+const AdminResetPassword = lazy(() => import('./pages/admin/ResetPassword'));
 const AdminDashboard = lazy(() => import('./pages/admin/Dashboard'));
 const AdminEmployees = lazy(() => import('./pages/admin/Employees'));
 const AdminEmployeeDetail = lazy(() => import('./pages/admin/EmployeeDetail'));
@@ -91,6 +93,8 @@ export default function App() {
 
         {/* Admin routes */}
         <Route path={routes.admin.login} element={<AdminLogin />} />
+        <Route path={routes.admin.forgotPassword} element={<AdminForgotPassword />} />
+        <Route path={routes.admin.resetPassword} element={<AdminResetPassword />} />
         <Route
           path={routes.admin.dashboard}
           element={

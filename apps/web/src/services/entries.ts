@@ -146,3 +146,42 @@ export async function applyCorrection(
     token
   });
 }
+
+// Direct entry edit functions
+export type UpdateEntryPayload = {
+  recordedAt?: string;
+  comment?: string | null;
+  reason: string;
+};
+
+export type CreateEntryPayload = {
+  employeeId: string;
+  workDate: string;
+  actionType: string;
+  recordedAt: string;
+  comment?: string;
+  reason: string;
+};
+
+export async function updateEntry(
+  entryId: string,
+  payload: UpdateEntryPayload,
+  token: string
+): Promise<TimeEntry> {
+  return apiRequest<TimeEntry>(`/api/admin/entries/${entryId}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+    token
+  });
+}
+
+export async function createEntry(
+  payload: CreateEntryPayload,
+  token: string
+): Promise<TimeEntry> {
+  return apiRequest<TimeEntry>('/api/admin/entries', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    token
+  });
+}

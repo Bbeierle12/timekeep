@@ -27,6 +27,28 @@ const correctionsListSchema = z.object({
   limit: z.coerce.number().min(1).max(500).optional()
 });
 
+const updateEntrySchema = z.object({
+  recordedAt: z.string().datetime().optional(),
+  comment: z.string().optional().nullable(),
+  reason: z.string().min(3).max(1000)
+});
+
+const createEntrySchema = z.object({
+  employeeId: z.string().uuid(),
+  workDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  actionType: z.enum([
+    'CLOCK_IN', 'CLOCK_OUT',
+    'LUNCH_START', 'LUNCH_END',
+    'SECOND_LUNCH_START', 'SECOND_LUNCH_END',
+    'THIRD_LUNCH_START', 'THIRD_LUNCH_END',
+    'BREAK_ACK_1', 'BREAK_ACK_2', 'BREAK_ACK_3',
+    'BREAK_SKIP_1', 'BREAK_SKIP_2', 'BREAK_SKIP_3'
+  ]),
+  recordedAt: z.string().datetime(),
+  comment: z.string().optional(),
+  reason: z.string().min(3).max(1000)
+});
+
 router.use(requireAuth, requireAdmin);
 
 router.get('/', async (req, res) => {
@@ -187,12 +209,88 @@ router.post('/corrections/:id/apply', async (req, res) => {
   }
 });
 
-router.put('/:id', (_req, res) => {
-  res.status(501).json({ status: 'error', message: 'Not implemented' });
+router.put('/:id', async (req, res) => {
+  const parsed = updateEntrySchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ status: 'error', message: 'Invalid payload. Reason is required.' });
+    return;
+  }
+
+  try {
+    const updated = await timeEntryService.updateEntry(req.params.id, {
+      recordedAt: parsed.data.recordedAt ? new Date(parsed.data.recordedAt) : undefined,
+      comment: parsed.data.comment,
+      correctedBy: req.user?.id,
+      correctionReason: parsed.data.reason
+    });
+
+    if (!updated) {
+      res.status(404).json({ status: 'error', message: 'Time entry not found' });
+      return;
+    }
+
+    await auditService.log({
+      actorType: 'ADMIN',
+      actorId: req.user?.id,
+      actorIdentifier: req.user?.id,
+      action: 'TIME_ENTRY_EDITED',
+      targetType: 'TIME_ENTRY',
+      targetId: updated.id,
+      details: {
+        reason: parsed.data.reason,
+        changes: {
+          recordedAt: parsed.data.recordedAt,
+          comment: parsed.data.comment
+        }
+      },
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent') ?? undefined
+    });
+
+    res.json({ status: 'success', data: updated });
+  } catch (error) {
+    res.status(400).json({ status: 'error', message: (error as Error).message });
+  }
 });
 
-router.post('/', (_req, res) => {
-  res.status(501).json({ status: 'error', message: 'Not implemented' });
+router.post('/', async (req, res) => {
+  const parsed = createEntrySchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ status: 'error', message: 'Invalid payload', errors: parsed.error.errors });
+    return;
+  }
+
+  try {
+    const entry = await timeEntryService.createManualEntry(req.user?.id ?? '', {
+      employeeId: parsed.data.employeeId,
+      workDate: parsed.data.workDate,
+      actionType: parsed.data.actionType,
+      recordedAt: new Date(parsed.data.recordedAt),
+      comment: parsed.data.comment,
+      reason: parsed.data.reason
+    });
+
+    await auditService.log({
+      actorType: 'ADMIN',
+      actorId: req.user?.id,
+      actorIdentifier: req.user?.id,
+      action: 'TIME_ENTRY_CREATED',
+      targetType: 'TIME_ENTRY',
+      targetId: entry.id,
+      details: {
+        employeeId: parsed.data.employeeId,
+        workDate: parsed.data.workDate,
+        actionType: parsed.data.actionType,
+        reason: parsed.data.reason
+      },
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent') ?? undefined
+    });
+
+    res.status(201).json({ status: 'success', data: entry });
+  } catch (error) {
+    res.status(400).json({ status: 'error', message: (error as Error).message });
+  }
 });
 
 router.post('/override-certification', (_req, res) => {

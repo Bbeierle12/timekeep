@@ -8,6 +8,8 @@ export const routes = {
   },
   admin: {
     login: '/admin/login',
+    forgotPassword: '/admin/forgot-password',
+    resetPassword: '/admin/reset-password',
     dashboard: '/admin',
     employees: '/admin/employees',
     employeeDetail: '/admin/employees/:id',

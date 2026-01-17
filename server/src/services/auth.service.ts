@@ -53,15 +53,32 @@ export const authService = {
     const identifier = params.initials.trim().toUpperCase();
     const now = new Date();
 
-    // Support login by either initials or employee_code
-    const employeeResult = await pool.query(
-      `SELECT id, initials, employee_code, full_name, pin_hash, is_active, access_status,
-              failed_login_count, locked_until
-       FROM employees
-       WHERE UPPER(initials) = $1 OR UPPER(employee_code) = $1
-       LIMIT 1`,
-      [identifier]
-    );
+    // Support login by either initials or employee_code (backward compatible)
+    let employeeResult;
+    try {
+      employeeResult = await pool.query(
+        `SELECT id, initials, employee_code, full_name, pin_hash, is_active, access_status,
+                failed_login_count, locked_until
+         FROM employees
+         WHERE UPPER(initials) = $1 OR UPPER(employee_code) = $1
+         LIMIT 1`,
+        [identifier]
+      );
+    } catch (err: unknown) {
+      // Fallback for databases without employee_code column
+      if ((err as { code?: string }).code === '42703') {
+        employeeResult = await pool.query(
+          `SELECT id, initials, full_name, pin_hash, is_active, access_status,
+                  failed_login_count, locked_until
+           FROM employees
+           WHERE UPPER(initials) = $1
+           LIMIT 1`,
+          [identifier]
+        );
+      } else {
+        throw err;
+      }
+    }
 
     if (employeeResult.rowCount === 0) {
       return { ok: false, status: 401, code: 'INVALID_CREDENTIALS', message: 'Invalid credentials' };

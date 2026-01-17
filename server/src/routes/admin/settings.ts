@@ -32,7 +32,22 @@ const settingsSchema = z.object({
   allow_first_meal_waiver: z.boolean().optional(),
   allow_second_meal_waiver: z.boolean().optional(),
   auto_flag_short_lunch: z.boolean().optional(),
-  require_comment_early_out: z.boolean().optional()
+  require_comment_early_out: z.boolean().optional(),
+  // Geofencing settings
+  geofence_enabled: z.boolean().optional(),
+  geofence_latitude: z.number().min(-90).max(90).optional().nullable(),
+  geofence_longitude: z.number().min(-180).max(180).optional().nullable(),
+  geofence_radius_meters: z.number().min(10).max(10000).optional(),
+  geofence_enforcement: z.enum(['WARN', 'BLOCK', 'LOG']).optional(),
+  // Payroll settings
+  pay_period_type: z.enum(['weekly', 'biweekly', 'semimonthly', 'monthly']).optional(),
+  weekly_start_day: z.number().min(0).max(6).optional(),
+  overtime_weekly_threshold: z.number().min(0).optional(),
+  overtime_daily_threshold: z.number().min(0).optional(),
+  doubletime_daily_threshold: z.number().min(0).optional(),
+  // Rest break settings
+  rest_break_minimum_minutes: z.number().min(5).max(30).optional(),
+  rest_break_interval_hours: z.number().min(1).max(6).optional()
 });
 
 router.use(requireAuth, requireAdmin);

@@ -448,5 +448,130 @@ export const timeEntryService = {
     );
 
     return result.rows;
+  },
+
+  async getEntryById(id: string) {
+    const result = await pool.query(
+      `SELECT te.*, e.initials, e.full_name
+       FROM time_entries te
+       JOIN employees e ON e.id = te.employee_id
+       WHERE te.id = $1`,
+      [id]
+    );
+    return result.rows[0] ?? null;
+  },
+
+  async updateEntry(
+    id: string,
+    update: {
+      recordedAt?: Date;
+      comment?: string | null;
+      correctedBy?: string;
+      correctionReason?: string;
+    }
+  ) {
+    // Get the original entry first
+    const original = await this.getEntryById(id);
+    if (!original) {
+      return null;
+    }
+
+    // Build update query
+    const setClauses: string[] = [];
+    const values: unknown[] = [];
+    let paramIndex = 1;
+
+    if (update.recordedAt !== undefined) {
+      // Store original value if this is the first correction
+      if (!original.original_recorded_at) {
+        setClauses.push(`original_recorded_at = recorded_at`);
+      }
+      setClauses.push(`recorded_at = $${paramIndex}`);
+      values.push(update.recordedAt);
+      paramIndex++;
+    }
+
+    if (update.comment !== undefined) {
+      // Store original value if this is the first correction
+      if (!original.original_comment && update.comment !== original.comment) {
+        setClauses.push(`original_comment = comment`);
+      }
+      setClauses.push(`comment = $${paramIndex}`);
+      values.push(update.comment);
+      paramIndex++;
+    }
+
+    if (update.correctedBy) {
+      setClauses.push(`corrected_by = $${paramIndex}`);
+      values.push(update.correctedBy);
+      paramIndex++;
+    }
+
+    if (update.correctionReason) {
+      setClauses.push(`correction_reason = $${paramIndex}`);
+      values.push(update.correctionReason);
+      paramIndex++;
+    }
+
+    setClauses.push(`corrected_at = $${paramIndex}`);
+    values.push(new Date());
+    paramIndex++;
+
+    if (setClauses.length === 0) {
+      return original;
+    }
+
+    values.push(id);
+
+    const result = await pool.query(
+      `UPDATE time_entries
+       SET ${setClauses.join(', ')}
+       WHERE id = $${paramIndex}
+       RETURNING *`,
+      values
+    );
+
+    const updated = result.rows[0];
+
+    // Recalculate daily summary
+    await dailySummaryService.recalculate(original.employee_id, original.work_date);
+
+    return updated;
+  },
+
+  async createManualEntry(
+    adminId: string,
+    entry: {
+      employeeId: string;
+      workDate: string;
+      actionType: string;
+      recordedAt: Date;
+      comment?: string;
+      reason?: string;
+    }
+  ) {
+    const result = await pool.query(
+      `INSERT INTO time_entries
+       (employee_id, work_date, action_type, recorded_at, comment,
+        corrected_by, correction_reason, corrected_at, is_manual_entry)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), TRUE)
+       RETURNING *`,
+      [
+        entry.employeeId,
+        entry.workDate,
+        entry.actionType,
+        entry.recordedAt,
+        entry.comment ?? null,
+        adminId,
+        entry.reason ?? 'Manual entry by admin'
+      ]
+    );
+
+    const newEntry = result.rows[0];
+
+    // Recalculate daily summary
+    await dailySummaryService.recalculate(entry.employeeId, entry.workDate);
+
+    return newEntry;
   }
 };

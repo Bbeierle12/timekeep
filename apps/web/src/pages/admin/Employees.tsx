@@ -9,6 +9,7 @@ import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Modal from '../../components/ui/Modal';
+import EmployeeImport from '../../components/admin/EmployeeImport';
 import { useAuth } from '../../hooks/useAuth';
 import {
   listEmployees,
@@ -36,6 +37,7 @@ export default function AdminEmployees() {
   const { token } = useAuth();
   const queryClient = useQueryClient();
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [filter, setFilter] = useState<ListEmployeesParams>({ status: 'active' });
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -112,6 +114,9 @@ export default function AdminEmployees() {
             <option value="inactive">Inactive</option>
             <option value="all">All</option>
           </select>
+          <Button variant="secondary" onClick={() => setShowImportModal(true)}>
+            Import CSV
+          </Button>
           <Button onClick={() => setShowCreateModal(true)}>
             + Add Employee
           </Button>
@@ -302,6 +307,12 @@ export default function AdminEmployees() {
           </div>
         </form>
       </Modal>
+
+      {/* Import Employee Modal */}
+      <EmployeeImport
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
+      />
     </AdminLayout>
   );
 }

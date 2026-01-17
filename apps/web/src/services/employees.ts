@@ -114,3 +114,54 @@ export async function resetEmployeePin(
     token
   });
 }
+
+// Import Types and Functions
+export type ImportResult = {
+  success: boolean;
+  row: number;
+  initials: string;
+  error?: string;
+};
+
+export type ImportSummary = {
+  importId: string;
+  totalRows: number;
+  successfulRows: number;
+  failedRows: number;
+  results: ImportResult[];
+};
+
+export type ImportHistory = {
+  id: string;
+  filename: string;
+  total_rows: number;
+  successful_rows: number;
+  failed_rows: number;
+  status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
+  started_at: string;
+  completed_at: string | null;
+};
+
+export async function importEmployees(
+  filename: string,
+  csvContent: string,
+  token: string
+): Promise<ImportSummary> {
+  return apiRequest<ImportSummary>('/api/admin/employees/import', {
+    method: 'POST',
+    body: JSON.stringify({ filename, csvContent }),
+    token
+  });
+}
+
+export async function getImportHistory(token: string, limit = 20): Promise<ImportHistory[]> {
+  return apiRequest<ImportHistory[]>(`/api/admin/employees/import/history?limit=${limit}`, {
+    token
+  });
+}
+
+export async function getImportDetails(importId: string, token: string): Promise<ImportHistory & { error_details: unknown }> {
+  return apiRequest<ImportHistory & { error_details: unknown }>(`/api/admin/employees/import/${importId}`, {
+    token
+  });
+}

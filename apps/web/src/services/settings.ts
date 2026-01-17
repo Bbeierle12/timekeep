@@ -27,6 +27,21 @@ export type Settings = {
   allow_second_meal_waiver: boolean;
   auto_flag_short_lunch: boolean;
   require_comment_early_out: boolean;
+  // Geofencing settings
+  geofence_enabled: boolean;
+  geofence_latitude: number | null;
+  geofence_longitude: number | null;
+  geofence_radius_meters: number;
+  geofence_enforcement: 'WARN' | 'BLOCK' | 'LOG';
+  // Payroll settings
+  pay_period_type: 'weekly' | 'biweekly' | 'semimonthly' | 'monthly';
+  weekly_start_day: number;
+  overtime_weekly_threshold: number;
+  overtime_daily_threshold: number;
+  doubletime_daily_threshold: number;
+  // Rest break settings
+  rest_break_minimum_minutes: number;
+  rest_break_interval_hours: number;
   updated_at: string;
 };
 

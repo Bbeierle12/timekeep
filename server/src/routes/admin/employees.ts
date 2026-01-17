@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requireAuth } from '../../middleware/auth';
 import { requireAdmin } from '../../middleware/adminAuth';
 import { employeeService } from '../../services/employee.service';
+import { employeeImportService } from '../../services/employeeImport.service';
 import { auditService } from '../../services/audit.service';
 
 const router = Router();
@@ -181,6 +182,88 @@ router.post('/:id/reset-pin', async (req, res) => {
   });
 
   res.json({ status: 'success', data: employee });
+});
+
+// Employee Import Routes
+const importSchema = z.object({
+  filename: z.string().min(1),
+  csvContent: z.string().min(1)
+});
+
+router.post('/import', async (req, res) => {
+  const parsed = importSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ status: 'error', message: 'Filename and CSV content are required' });
+    return;
+  }
+
+  const adminId = req.user?.id;
+  if (!adminId) {
+    res.status(401).json({ status: 'error', message: 'Unauthorized' });
+    return;
+  }
+
+  try {
+    // Parse CSV
+    const rows = employeeImportService.parseCSV(parsed.data.csvContent);
+
+    if (rows.length === 0) {
+      res.status(400).json({ status: 'error', message: 'No valid data rows found in CSV' });
+      return;
+    }
+
+    // Import employees
+    const result = await employeeImportService.importEmployees(
+      adminId,
+      parsed.data.filename,
+      rows
+    );
+
+    await auditService.log({
+      actorType: 'ADMIN',
+      actorId: adminId,
+      actorIdentifier: adminId,
+      action: 'EMPLOYEE_IMPORT',
+      targetType: 'IMPORT',
+      targetId: result.importId,
+      details: {
+        filename: parsed.data.filename,
+        totalRows: result.totalRows,
+        successfulRows: result.successfulRows,
+        failedRows: result.failedRows
+      },
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent') ?? undefined
+    });
+
+    res.json({ status: 'success', data: result });
+  } catch (error) {
+    res.status(400).json({ status: 'error', message: (error as Error).message });
+  }
+});
+
+router.get('/import/history', async (req, res) => {
+  const adminId = req.user?.id;
+  if (!adminId) {
+    res.status(401).json({ status: 'error', message: 'Unauthorized' });
+    return;
+  }
+
+  const limit = parseInt(req.query.limit as string) || 20;
+  const history = await employeeImportService.getImportHistory(adminId, limit);
+
+  res.json({ status: 'success', data: history });
+});
+
+router.get('/import/:importId', async (req, res) => {
+  const details = await employeeImportService.getImportDetails(req.params.importId);
+
+  if (!details) {
+    res.status(404).json({ status: 'error', message: 'Import not found' });
+    return;
+  }
+
+  res.json({ status: 'success', data: details });
 });
 
 export default router;
