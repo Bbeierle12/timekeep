@@ -32,5 +32,6 @@ export const config = {
   csrfSecret: getCsrfSecret(),
   nodeEnv: process.env.NODE_ENV ?? 'development',
   corsOrigins: process.env.CORS_ORIGINS?.split(',') ?? ['http://localhost:5173', 'http://localhost:3000'],
-  csrfEnabled: process.env.CSRF_ENABLED !== 'false'
+  // CSRF disabled by default in development, enabled by default in production
+  csrfEnabled: process.env.CSRF_ENABLED === 'true' || (process.env.NODE_ENV === 'production' && process.env.CSRF_ENABLED !== 'false')
 };
