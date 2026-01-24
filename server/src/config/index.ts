@@ -26,6 +26,7 @@ function getCsrfSecret(): string {
 }
 
 const nodeEnv = process.env.NODE_ENV ?? 'development';
+const rateLimitRedisUrl = process.env.RATE_LIMIT_REDIS_URL ?? process.env.REDIS_URL ?? undefined;
 
 export const config = {
   port: Number(process.env.PORT ?? 4000),
@@ -35,6 +36,7 @@ export const config = {
   nodeEnv,
   corsOrigins: process.env.CORS_ORIGINS?.split(',') ?? ['http://localhost:5173', 'http://localhost:3000'],
   authCookieName: nodeEnv === 'production' ? '__Host-timekeep-session' : 'timekeep_session',
+  rateLimitRedisUrl,
   // CSRF disabled by default in development, enabled by default in production
   csrfEnabled: process.env.CSRF_ENABLED === 'true' || (nodeEnv === 'production' && process.env.CSRF_ENABLED !== 'false')
 };

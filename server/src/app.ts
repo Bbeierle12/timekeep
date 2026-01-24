@@ -30,7 +30,10 @@ app.use(express.json());
 app.use(cookieParser());
 
 // Apply stricter rate limiting to login endpoints (20 requests per 15 minutes per IP)
-app.use('/api/auth/login', loginRateLimiter);
+app.use('/api/auth/employee/login', loginRateLimiter);
+app.use('/api/auth/admin/login', loginRateLimiter);
+app.use('/api/v1/auth/employee/login', loginRateLimiter);
+app.use('/api/v1/auth/admin/login', loginRateLimiter);
 
 // Apply global rate limiting to all API endpoints (100 requests per 15 minutes per IP)
 app.use('/api', globalRateLimiter);
