@@ -46,7 +46,7 @@ type ResetPinForm = z.infer<typeof resetPinSchema>;
 export default function AdminEmployeeDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { token } = useAuth();
+  const { isAuthenticated } = useAuth();
   const queryClient = useQueryClient();
 
   const [isEditing, setIsEditing] = useState(false);
@@ -55,8 +55,8 @@ export default function AdminEmployeeDetail() {
 
   const { data: employee, isLoading, error } = useQuery({
     queryKey: ['employee', id],
-    queryFn: () => getEmployee(id!, token!),
-    enabled: !!token && !!id
+    queryFn: () => getEmployee(id!),
+    enabled: isAuthenticated && !!id
   });
 
   const {
@@ -88,7 +88,7 @@ export default function AdminEmployeeDetail() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: (data: UpdateEmployeePayload) => updateEmployee(id!, data, token!),
+    mutationFn: (data: UpdateEmployeePayload) => updateEmployee(id!, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['employee', id] });
       queryClient.invalidateQueries({ queryKey: ['employees'] });
@@ -97,7 +97,7 @@ export default function AdminEmployeeDetail() {
   });
 
   const deactivateMutation = useMutation({
-    mutationFn: () => deactivateEmployee(id!, token!),
+    mutationFn: () => deactivateEmployee(id!),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['employee', id] });
       queryClient.invalidateQueries({ queryKey: ['employees'] });
@@ -106,7 +106,7 @@ export default function AdminEmployeeDetail() {
   });
 
   const reactivateMutation = useMutation({
-    mutationFn: () => reactivateEmployee(id!, token!),
+    mutationFn: () => reactivateEmployee(id!),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['employee', id] });
       queryClient.invalidateQueries({ queryKey: ['employees'] });
@@ -114,7 +114,7 @@ export default function AdminEmployeeDetail() {
   });
 
   const resetPinMutation = useMutation({
-    mutationFn: (pin: string) => resetEmployeePin(id!, pin, token!),
+    mutationFn: (pin: string) => resetEmployeePin(id!, pin),
     onSuccess: () => {
       setShowResetPinModal(false);
       resetPinForm();

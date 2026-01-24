@@ -11,6 +11,10 @@ const ACTION_LABELS: Record<ActionType, string> = {
   CLOCK_OUT: 'Clock Out',
   LUNCH_START: 'Lunch Start',
   LUNCH_END: 'Lunch End',
+  SECOND_LUNCH_START: 'Second Lunch Start',
+  SECOND_LUNCH_END: 'Second Lunch End',
+  THIRD_LUNCH_START: 'Third Lunch Start',
+  THIRD_LUNCH_END: 'Third Lunch End',
   BREAK_ACK_1: 'Break 1',
   BREAK_ACK_2: 'Break 2',
   BREAK_ACK_3: 'Break 3',
@@ -60,18 +64,21 @@ function groupEntriesByDate(entries: TimeEntry[]): GroupedEntries[] {
 
 export default function EmployeeHistory() {
   const navigate = useNavigate();
-  const { token } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadHistory() {
-      if (!token) return;
+      if (!isAuthenticated) {
+        setIsLoading(false);
+        return;
+      }
 
       try {
-        const history = await fetchHistory(token, 200);
-        setEntries(history);
+        const history = await fetchHistory(200);
+        setEntries(history.items);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load history');
       } finally {
@@ -80,7 +87,7 @@ export default function EmployeeHistory() {
     }
 
     loadHistory();
-  }, [token]);
+  }, [isAuthenticated]);
 
   const groupedEntries = groupEntriesByDate(entries);
   const today = new Date();

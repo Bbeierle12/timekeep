@@ -9,15 +9,12 @@ export type DateRange = {
 
 export async function downloadReport(
   type: ReportType,
-  range: DateRange,
-  token: string
+  range: DateRange
 ): Promise<Blob> {
-  const url = `${API_BASE_URL}/api/admin/reports/${type}?start=${range.start}&end=${range.end}`;
+  const url = `${API_BASE_URL}/api/v1/admin/reports/${type}?start=${range.start}&end=${range.end}`;
 
   const response = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${token}`
-    }
+    credentials: 'include'
   });
 
   if (!response.ok) {
@@ -41,10 +38,9 @@ export function triggerDownload(blob: Blob, filename: string): void {
 
 export async function downloadAndSaveReport(
   type: ReportType,
-  range: DateRange,
-  token: string
+  range: DateRange
 ): Promise<void> {
-  const blob = await downloadReport(type, range, token);
+  const blob = await downloadReport(type, range);
   const filename = `${type}_${range.start}_${range.end}.csv`;
   triggerDownload(blob, filename);
 }

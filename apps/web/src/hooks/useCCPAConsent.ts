@@ -15,7 +15,7 @@ type ConsentResponse = {
 };
 
 export function useCCPAConsent() {
-  const { token, user } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const queryClient = useQueryClient();
 
   // Check current consent status
@@ -26,12 +26,10 @@ export function useCCPAConsent() {
   } = useQuery({
     queryKey: ['ccpa-consent', user?.id],
     queryFn: async () => {
-      const result = await apiRequest<ConsentStatus>('/api/consent/location', {
-        token: token ?? undefined,
-      });
+      const result = await apiRequest<ConsentStatus>('/api/consent/location');
       return result;
     },
-    enabled: !!token && !!user,
+    enabled: isAuthenticated && !!user,
     staleTime: 10 * 60 * 1000, // 10 minutes
   });
 
@@ -40,7 +38,6 @@ export function useCCPAConsent() {
     mutationFn: async (accepted: boolean) => {
       const result = await apiRequest<ConsentResponse>('/api/consent/location', {
         method: 'POST',
-        token: token ?? undefined,
         body: JSON.stringify({ accepted }),
       });
       return result;

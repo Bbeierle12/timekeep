@@ -83,6 +83,53 @@ export const employeeService = {
     return result.rows as EmployeeRecord[];
   },
 
+  async listPaged(params: {
+    status?: 'active' | 'inactive' | 'all';
+    search?: string;
+    limit: number;
+    offset: number;
+  }) {
+    const filters: string[] = [];
+    const values: Array<string | boolean | number> = [];
+
+    if (params.status === 'active') {
+      values.push(true);
+      filters.push(`is_active = $${values.length}`);
+    }
+
+    if (params.status === 'inactive') {
+      values.push(false);
+      filters.push(`is_active = $${values.length}`);
+    }
+
+    if (params.search) {
+      values.push(`%${params.search}%`);
+      filters.push(`(full_name ILIKE $${values.length} OR initials ILIKE $${values.length})`);
+    }
+
+    const whereClause = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+
+    const countResult = await pool.query(
+      `SELECT COUNT(*) FROM employees ${whereClause}`,
+      values
+    );
+    const total = Number(countResult.rows[0]?.count ?? 0);
+
+    values.push(params.limit, params.offset);
+
+    const result = await pool.query(
+      `SELECT id, initials, full_name, is_active, is_exempt, email, phone_number,
+              hire_date, hourly_rate, access_status
+       FROM employees
+       ${whereClause}
+       ORDER BY full_name ASC
+       LIMIT $${values.length - 1} OFFSET $${values.length}`,
+      values
+    );
+
+    return { items: result.rows as EmployeeRecord[], total };
+  },
+
   async getById(id: string) {
     const result = await pool.query(
       `SELECT id, initials, full_name, is_active, is_exempt, email, phone_number,

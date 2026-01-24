@@ -25,36 +25,31 @@ export type UpdateAdminPayload = {
   mfaEnabled?: boolean;
 };
 
-export async function listAdmins(token: string): Promise<Admin[]> {
-  return apiRequest<Admin[]>('/api/admin/admins', { token });
+export async function listAdmins(): Promise<Admin[]> {
+  return apiRequest<Admin[]>('/api/v1/admin/admins');
 }
 
 export async function createAdmin(
-  payload: CreateAdminPayload,
-  token: string
+  payload: CreateAdminPayload
 ): Promise<Admin> {
-  return apiRequest<Admin>('/api/admin/admins', {
+  return apiRequest<Admin>('/api/v1/admin/admins', {
     method: 'POST',
-    body: JSON.stringify(payload),
-    token
+    body: JSON.stringify(payload)
   });
 }
 
 export async function updateAdmin(
   id: string,
-  payload: UpdateAdminPayload,
-  token: string
+  payload: UpdateAdminPayload
 ): Promise<Admin> {
-  return apiRequest<Admin>(`/api/admin/admins/${id}`, {
+  return apiRequest<Admin>(`/api/v1/admin/admins/${id}`, {
     method: 'PUT',
-    body: JSON.stringify(payload),
-    token
+    body: JSON.stringify(payload)
   });
 }
 
-export async function deleteAdmin(id: string, token: string): Promise<void> {
-  return apiRequest<void>(`/api/admin/admins/${id}`, {
-    method: 'DELETE',
-    token
+export async function deleteAdmin(id: string): Promise<void> {
+  return apiRequest<void>(`/api/v1/admin/admins/${id}`, {
+    method: 'DELETE'
   });
 }

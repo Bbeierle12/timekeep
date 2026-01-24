@@ -67,18 +67,16 @@ export type ListParams = {
 };
 
 export async function fetchComplianceDashboard(
-  date: string | undefined,
-  token: string
+  date: string | undefined
 ): Promise<ComplianceDashboard> {
   const url = date
-    ? `/api/admin/compliance/dashboard?date=${date}`
-    : '/api/admin/compliance/dashboard';
-  return apiRequest<ComplianceDashboard>(url, { token });
+    ? `/api/v1/admin/compliance/dashboard?date=${date}`
+    : '/api/v1/admin/compliance/dashboard';
+  return apiRequest<ComplianceDashboard>(url);
 }
 
 export async function fetchViolations(
-  params: ListParams,
-  token: string
+  params: ListParams
 ): Promise<Violation[]> {
   const searchParams = new URLSearchParams();
   if (params.start) searchParams.set('start', params.start);
@@ -86,14 +84,13 @@ export async function fetchViolations(
   if (params.limit) searchParams.set('limit', String(params.limit));
 
   const query = searchParams.toString();
-  const url = `/api/admin/compliance/violations${query ? `?${query}` : ''}`;
+  const url = `/api/v1/admin/compliance/violations${query ? `?${query}` : ''}`;
 
-  return apiRequest<Violation[]>(url, { token });
+  return apiRequest<Violation[]>(url);
 }
 
 export async function fetchWaivers(
-  params: ListParams,
-  token: string
+  params: ListParams
 ): Promise<WaiverRecord[]> {
   const searchParams = new URLSearchParams();
   if (params.start) searchParams.set('start', params.start);
@@ -101,14 +98,13 @@ export async function fetchWaivers(
   if (params.limit) searchParams.set('limit', String(params.limit));
 
   const query = searchParams.toString();
-  const url = `/api/admin/compliance/waivers${query ? `?${query}` : ''}`;
+  const url = `/api/v1/admin/compliance/waivers${query ? `?${query}` : ''}`;
 
-  return apiRequest<WaiverRecord[]>(url, { token });
+  return apiRequest<WaiverRecord[]>(url);
 }
 
 export async function fetchAttestations(
-  params: ListParams,
-  token: string
+  params: ListParams
 ): Promise<AttestationRecord[]> {
   const searchParams = new URLSearchParams();
   if (params.start) searchParams.set('start', params.start);
@@ -116,17 +112,16 @@ export async function fetchAttestations(
   if (params.limit) searchParams.set('limit', String(params.limit));
 
   const query = searchParams.toString();
-  const url = `/api/admin/compliance/attestations${query ? `?${query}` : ''}`;
+  const url = `/api/v1/admin/compliance/attestations${query ? `?${query}` : ''}`;
 
-  return apiRequest<AttestationRecord[]>(url, { token });
+  return apiRequest<AttestationRecord[]>(url);
 }
 
 export async function fetchAlerts(
-  date: string | undefined,
-  token: string
+  date: string | undefined
 ): Promise<ComplianceAlert[]> {
   const url = date
-    ? `/api/admin/compliance/alerts?date=${date}`
-    : '/api/admin/compliance/alerts';
-  return apiRequest<ComplianceAlert[]>(url, { token });
+    ? `/api/v1/admin/compliance/alerts?date=${date}`
+    : '/api/v1/admin/compliance/alerts';
+  return apiRequest<ComplianceAlert[]>(url);
 }

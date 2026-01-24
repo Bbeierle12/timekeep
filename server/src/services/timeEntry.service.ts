@@ -422,6 +422,28 @@ export const timeEntryService = {
     return result.rows;
   },
 
+  async listEntriesForEmployeePaged(
+    employeeId: string,
+    params: { limit: number; offset: number }
+  ) {
+    const countResult = await pool.query(
+      'SELECT COUNT(*) FROM time_entries WHERE employee_id = $1',
+      [employeeId]
+    );
+    const total = Number(countResult.rows[0]?.count ?? 0);
+
+    const result = await pool.query(
+      `SELECT id, work_date, action_type, recorded_at, comment, resolved_address
+       FROM time_entries
+       WHERE employee_id = $1
+       ORDER BY recorded_at DESC
+       LIMIT $2 OFFSET $3`,
+      [employeeId, params.limit, params.offset]
+    );
+
+    return { items: result.rows, total };
+  },
+
   async getEntriesForDate(date: string) {
     const result = await pool.query(
       `SELECT te.id, te.employee_id, te.work_date, te.action_type, te.recorded_at,
@@ -448,6 +470,23 @@ export const timeEntryService = {
     );
 
     return result.rows;
+  },
+
+  async listEntriesPaged(params: { limit: number; offset: number }) {
+    const countResult = await pool.query('SELECT COUNT(*) FROM time_entries');
+    const total = Number(countResult.rows[0]?.count ?? 0);
+
+    const result = await pool.query(
+      `SELECT te.id, te.employee_id, te.work_date, te.action_type, te.recorded_at,
+              te.comment, te.resolved_address, e.initials, e.full_name
+       FROM time_entries te
+       JOIN employees e ON e.id = te.employee_id
+       ORDER BY te.recorded_at DESC
+       LIMIT $1 OFFSET $2`,
+      [params.limit, params.offset]
+    );
+
+    return { items: result.rows, total };
   },
 
   async getEntryById(id: string) {

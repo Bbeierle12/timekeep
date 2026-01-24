@@ -1,10 +1,11 @@
-import { Router } from 'express';
+import { Router, type Response } from 'express';
 import { z } from 'zod';
 import { authService } from '../services/auth.service';
 import { requireAuth } from '../middleware/auth';
 import { requireEmployee } from '../middleware/employeeAuth';
 import { employeeService } from '../services/employee.service';
 import { passwordResetService } from '../services/passwordReset.service';
+import { config } from '../config';
 
 const router = Router();
 
@@ -36,6 +37,21 @@ const validateTokenSchema = z.object({
   token: z.string().min(1)
 });
 
+const authCookieOptions = {
+  httpOnly: true,
+  secure: config.nodeEnv === 'production',
+  sameSite: 'lax' as const,
+  path: '/'
+};
+
+function setAuthCookie(res: Response, token: string, expiresAt: Date) {
+  res.cookie(config.authCookieName, token, { ...authCookieOptions, expires: expiresAt });
+}
+
+function clearAuthCookie(res: Response) {
+  res.clearCookie(config.authCookieName, authCookieOptions);
+}
+
 router.post('/employee/login', async (req, res) => {
   const parsed = employeeLoginSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -55,7 +71,9 @@ router.post('/employee/login', async (req, res) => {
     return;
   }
 
-  res.json({ status: 'success', data: result });
+  setAuthCookie(res, result.token, result.expiresAt);
+  const { token, ...safeResult } = result;
+  res.json({ status: 'success', data: safeResult });
 });
 
 router.post('/admin/login', async (req, res) => {
@@ -77,7 +95,9 @@ router.post('/admin/login', async (req, res) => {
     return;
   }
 
-  res.json({ status: 'success', data: result });
+  setAuthCookie(res, result.token, result.expiresAt);
+  const { token, ...safeResult } = result;
+  res.json({ status: 'success', data: safeResult });
 });
 
 router.post('/logout', requireAuth, async (req, res) => {
@@ -87,6 +107,7 @@ router.post('/logout', requireAuth, async (req, res) => {
   }
 
   await authService.logout({ token: req.token });
+  clearAuthCookie(res);
   res.json({ status: 'success' });
 });
 
@@ -109,7 +130,28 @@ router.post('/refresh', requireAuth, async (req, res) => {
     return;
   }
 
-  res.json({ status: 'success', data: result });
+  setAuthCookie(res, result.token, result.expiresAt);
+  const { token, ...safeResult } = result;
+  res.json({ status: 'success', data: safeResult });
+});
+
+router.get('/session', requireAuth, async (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ status: 'error', message: 'Missing auth context' });
+    return;
+  }
+
+  const user = await authService.getSessionUser({
+    userId: req.user.id,
+    userType: req.user.type
+  });
+
+  if (!user) {
+    res.status(403).json({ status: 'error', message: 'User not active' });
+    return;
+  }
+
+  res.json({ status: 'success', data: { user } });
 });
 
 router.post('/employee/change-pin', requireAuth, requireEmployee, async (req, res) => {

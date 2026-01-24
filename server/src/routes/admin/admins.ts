@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth } from '../../middleware/auth';
-import { requireAdmin } from '../../middleware/adminAuth';
+import { requireAdmin, requireAdminRole } from '../../middleware/adminAuth';
 import { adminService } from '../../services/admin.service';
 import { auditService } from '../../services/audit.service';
 
@@ -28,7 +28,7 @@ router.get('/', async (_req, res) => {
   res.json({ status: 'success', data: admins });
 });
 
-router.post('/', async (req, res) => {
+router.post('/', requireAdminRole(['owner']), async (req, res) => {
   const parsed = createAdminSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ status: 'error', message: 'Invalid payload' });
@@ -51,11 +51,12 @@ router.post('/', async (req, res) => {
 
     res.status(201).json({ status: 'success', data: admin });
   } catch (error) {
-    res.status(400).json({ status: 'error', message: (error as Error).message });
+    console.error('Failed to create admin:', error);
+    res.status(400).json({ status: 'error', message: 'Unable to create admin account' });
   }
 });
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireAdminRole(['owner']), async (req, res) => {
   const parsed = updateAdminSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ status: 'error', message: 'Invalid payload' });
@@ -82,7 +83,7 @@ router.put('/:id', async (req, res) => {
   res.json({ status: 'success', data: admin });
 });
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireAdminRole(['owner']), async (req, res) => {
   try {
     const result = await adminService.delete(req.params.id);
     if (!result) {
@@ -103,7 +104,8 @@ router.delete('/:id', async (req, res) => {
 
     res.json({ status: 'success', data: result });
   } catch (error) {
-    res.status(400).json({ status: 'error', message: (error as Error).message });
+    console.error('Failed to delete admin:', error);
+    res.status(400).json({ status: 'error', message: 'Unable to delete admin account' });
   }
 });
 

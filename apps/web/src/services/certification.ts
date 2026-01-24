@@ -17,19 +17,15 @@ export type CertifyPayload = {
   correctionNote?: string;
 };
 
-export async function fetchPendingCertification(
-  token: string
-): Promise<PendingCertification | null> {
-  return apiRequest<PendingCertification | null>('/api/certify/pending', { token });
+export async function fetchPendingCertification(): Promise<PendingCertification | null> {
+  return apiRequest<PendingCertification | null>('/api/v1/certifications/pending');
 }
 
 export async function certifyDay(
-  payload: CertifyPayload,
-  token: string
+  payload: CertifyPayload
 ): Promise<DailySummary> {
-  return apiRequest<DailySummary>('/api/certify', {
+  return apiRequest<DailySummary>('/api/v1/certifications', {
     method: 'POST',
-    body: JSON.stringify(payload),
-    token
+    body: JSON.stringify(payload)
   });
 }

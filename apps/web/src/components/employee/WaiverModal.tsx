@@ -29,7 +29,7 @@ export default function WaiverModal({
   onClose,
   onSuccess
 }: WaiverModalProps) {
-  const { token } = useAuth();
+  const { isAuthenticated } = useAuth();
   const { requestLocation } = useGeolocation();
   const signaturePadRef = useRef<SignaturePadRef>(null);
 
@@ -50,7 +50,7 @@ export default function WaiverModal({
   };
 
   const handleSubmit = async () => {
-    if (!acknowledged || !hasSigned || !token) return;
+    if (!acknowledged || !hasSigned || !isAuthenticated) return;
 
     setIsSubmitting(true);
     setError(null);
@@ -71,8 +71,7 @@ export default function WaiverModal({
           signatureImage,
           gpsLatitude: locationResult.coords?.latitude,
           gpsLongitude: locationResult.coords?.longitude
-        },
-        token
+        }
       );
 
       onSuccess();

@@ -123,6 +123,7 @@ CREATE TABLE admin_trusted_devices (
 CREATE TABLE employees (
     id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     initials            VARCHAR(3) UNIQUE NOT NULL,
+    employee_code       VARCHAR(20) UNIQUE,
     full_name           TEXT NOT NULL,
 
     -- Authentication (based on company auth_method)
@@ -176,6 +177,8 @@ CREATE TABLE time_entries (
     action_type         TEXT NOT NULL,
         -- Options: 'CLOCK_IN', 'CLOCK_OUT',
         --          'LUNCH_START', 'LUNCH_END',
+        --          'SECOND_LUNCH_START', 'SECOND_LUNCH_END',
+        --          'THIRD_LUNCH_START', 'THIRD_LUNCH_END',
         --          'BREAK_ACK_1', 'BREAK_ACK_2', 'BREAK_ACK_3',
         --          'BREAK_SKIP_1', 'BREAK_SKIP_2', 'BREAK_SKIP_3'
 
@@ -194,7 +197,9 @@ CREATE TABLE time_entries (
 
     -- Correction tracking
     is_original         BOOLEAN DEFAULT TRUE,
+    original_recorded_at TIMESTAMP,
     original_value      TIMESTAMP,
+    original_comment    TEXT,
     corrected_by        UUID REFERENCES admins(id),
     correction_reason   TEXT,
     corrected_at        TIMESTAMP,
@@ -416,6 +421,21 @@ CREATE TABLE sessions (
 
 CREATE INDEX idx_sessions_token ON sessions(token_hash);
 CREATE INDEX idx_sessions_user ON sessions(user_type, user_id);
+
+-- -------------------------------------------------------------
+-- PASSWORD RESET TOKENS
+-- -------------------------------------------------------------
+CREATE TABLE password_reset_tokens (
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_type           VARCHAR(10) NOT NULL,
+    user_id             UUID NOT NULL,
+    token_hash          VARCHAR(128) UNIQUE NOT NULL,
+    expires_at          TIMESTAMP NOT NULL,
+    used_at             TIMESTAMP,
+    created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_password_reset_tokens_hash ON password_reset_tokens(token_hash);
 
 -- -------------------------------------------------------------
 -- PUSH TOKENS

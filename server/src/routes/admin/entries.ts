@@ -9,8 +9,12 @@ import { auditService } from '../../services/audit.service';
 const router = Router();
 
 const listSchema = z.object({
-  limit: z.coerce.number().min(1).max(500).optional()
+  limit: z.coerce.number().int().min(1).max(200).optional(),
+  offset: z.coerce.number().int().min(0).optional()
 });
+
+const dateParamSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const employeeIdParamSchema = z.string().uuid();
 
 const correctionRequestSchema = z.object({
   newRecordedAt: z.string().datetime(),
@@ -24,7 +28,8 @@ const correctionDecisionSchema = z.object({
 
 const correctionsListSchema = z.object({
   status: z.enum(['PENDING', 'APPROVED', 'REJECTED', 'APPLIED']).optional(),
-  limit: z.coerce.number().min(1).max(500).optional()
+  limit: z.coerce.number().int().min(1).max(200).optional(),
+  offset: z.coerce.number().int().min(0).optional()
 });
 
 const updateEntrySchema = z.object({
@@ -58,19 +63,51 @@ router.get('/', async (req, res) => {
     return;
   }
 
-  const entries = await timeEntryService.listEntries(parsed.data.limit ?? 200);
-  res.json({ status: 'success', data: entries });
+  const limit = parsed.data.limit ?? 200;
+  const offset = parsed.data.offset ?? 0;
+  const { items, total } = await timeEntryService.listEntriesPaged({ limit, offset });
+
+  res.json({
+    status: 'success',
+    data: {
+      items,
+      total,
+      limit,
+      offset,
+      nextOffset: offset + limit < total ? offset + limit : null
+    }
+  });
 });
 
 router.get('/daily/:date', async (req, res) => {
-  const date = req.params.date;
+  const parsed = dateParamSchema.safeParse(req.params.date);
+  if (!parsed.success) {
+    res.status(400).json({ status: 'error', message: 'Invalid date format' });
+    return;
+  }
+
+  const date = parsed.data;
   const entries = await timeEntryService.getEntriesForDate(date);
   res.json({ status: 'success', data: entries });
 });
 
 router.get('/employee/:id', async (req, res) => {
-  const date = req.query.date ? String(req.query.date) : undefined;
-  const entries = await timeEntryService.getEntriesForEmployee(req.params.id, date);
+  const parsedId = employeeIdParamSchema.safeParse(req.params.id);
+  if (!parsedId.success) {
+    res.status(400).json({ status: 'error', message: 'Invalid employee id' });
+    return;
+  }
+
+  const dateQuery = z.object({
+    date: dateParamSchema.optional()
+  }).safeParse(req.query);
+  if (!dateQuery.success) {
+    res.status(400).json({ status: 'error', message: 'Invalid query' });
+    return;
+  }
+
+  const date = dateQuery.data.date;
+  const entries = await timeEntryService.getEntriesForEmployee(parsedId.data, date);
   res.json({ status: 'success', data: entries });
 });
 

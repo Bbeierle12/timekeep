@@ -19,10 +19,11 @@ async function runMigrations() {
   const migrationsDir = join(__dirname, 'migrations');
   const pool = superuserPool;
 
-  // Run migrations 003 and 004
+  // Run migrations 003+
   const migrations = [
     '003_phase3_updates.sql',
-    '004_phase4_updates.sql'
+    '004_phase4_updates.sql',
+    '005_phase5_security_schema.sql'
   ];
 
   for (const migration of migrations) {

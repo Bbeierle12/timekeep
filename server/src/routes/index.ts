@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import authRoutes from './auth';
+import v1Routes from './v1';
 import employeeRoutes from './employee';
 import punchRoutes from './punch';
 import waiverRoutes from './waiver';
@@ -10,6 +11,7 @@ import adminRoutes from './admin';
 
 const router = Router();
 
+router.use('/v1', v1Routes);
 router.use('/auth', authRoutes);
 router.use('/', employeeRoutes);
 router.use('/punch', punchRoutes);

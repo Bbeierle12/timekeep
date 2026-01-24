@@ -47,17 +47,15 @@ export type Settings = {
 
 export type UpdateSettingsPayload = Partial<Omit<Settings, 'id' | 'updated_at'>>;
 
-export async function fetchSettings(token: string): Promise<Settings> {
-  return apiRequest<Settings>('/api/admin/settings', { token });
+export async function fetchSettings(): Promise<Settings> {
+  return apiRequest<Settings>('/api/v1/admin/settings');
 }
 
 export async function updateSettings(
-  payload: UpdateSettingsPayload,
-  token: string
+  payload: UpdateSettingsPayload
 ): Promise<Settings> {
-  return apiRequest<Settings>('/api/admin/settings', {
+  return apiRequest<Settings>('/api/v1/admin/settings', {
     method: 'PUT',
-    body: JSON.stringify(payload),
-    token
+    body: JSON.stringify(payload)
   });
 }

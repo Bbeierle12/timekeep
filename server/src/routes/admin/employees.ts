@@ -38,13 +38,44 @@ const resetPinSchema = z.object({
   pin: z.string().min(4)
 });
 
+const listQuerySchema = z.object({
+  status: z.enum(['active', 'inactive', 'all']).optional(),
+  search: z.string().min(1).max(100).optional(),
+  limit: z.coerce.number().int().min(1).max(200).optional(),
+  offset: z.coerce.number().int().min(0).optional()
+});
+
 router.use(requireAuth, requireAdmin);
 
 router.get('/', async (req, res) => {
-  const status = (req.query.status as 'active' | 'inactive' | 'all') ?? 'all';
-  const search = req.query.search ? String(req.query.search) : undefined;
-  const employees = await employeeService.list({ status, search });
-  res.json({ status: 'success', data: employees });
+  const parsed = listQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ status: 'error', message: 'Invalid query' });
+    return;
+  }
+
+  const limit = parsed.data.limit ?? 50;
+  const offset = parsed.data.offset ?? 0;
+  const status = parsed.data.status ?? 'all';
+  const search = parsed.data.search;
+
+  const { items, total } = await employeeService.listPaged({
+    status,
+    search,
+    limit,
+    offset
+  });
+
+  res.json({
+    status: 'success',
+    data: {
+      items,
+      total,
+      limit,
+      offset,
+      nextOffset: offset + limit < total ? offset + limit : null
+    }
+  });
 });
 
 router.post('/', async (req, res) => {
@@ -74,7 +105,8 @@ router.post('/', async (req, res) => {
 
     res.status(201).json({ status: 'success', data: employee });
   } catch (error) {
-    res.status(400).json({ status: 'error', message: (error as Error).message });
+    console.error('Failed to create employee:', error);
+    res.status(400).json({ status: 'error', message: 'Unable to create employee' });
   }
 });
 
@@ -238,7 +270,8 @@ router.post('/import', async (req, res) => {
 
     res.json({ status: 'success', data: result });
   } catch (error) {
-    res.status(400).json({ status: 'error', message: (error as Error).message });
+    console.error('Employee import failed:', error);
+    res.status(400).json({ status: 'error', message: 'Unable to import employees' });
   }
 });
 

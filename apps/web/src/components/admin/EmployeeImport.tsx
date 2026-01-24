@@ -17,7 +17,7 @@ type EmployeeImportProps = {
 };
 
 export default function EmployeeImport({ isOpen, onClose }: EmployeeImportProps) {
-  const { token } = useAuth();
+  const { isAuthenticated } = useAuth();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -27,12 +27,12 @@ export default function EmployeeImport({ isOpen, onClose }: EmployeeImportProps)
 
   const { data: importHistory } = useQuery({
     queryKey: ['importHistory'],
-    queryFn: () => getImportHistory(token!, 10),
-    enabled: !!token && view === 'history'
+    queryFn: () => getImportHistory(10),
+    enabled: isAuthenticated && view === 'history'
   });
 
   const importMutation = useMutation({
-    mutationFn: () => importEmployees(selectedFile!.name, csvContent, token!),
+    mutationFn: () => importEmployees(selectedFile!.name, csvContent),
     onSuccess: (result) => {
       setImportResult(result);
       setView('result');

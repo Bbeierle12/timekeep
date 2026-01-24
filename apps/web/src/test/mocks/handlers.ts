@@ -67,8 +67,12 @@ export const mockComplianceStats = {
 };
 
 export const handlers = [
+  http.get(`${API_URL}/api/v1/csrf-token`, () => {
+    return HttpResponse.json({ csrfToken: 'mock-csrf-token' });
+  }),
+
   // Auth endpoints
-  http.post(`${API_URL}/api/auth/employee/login`, async ({ request }) => {
+  http.post(`${API_URL}/api/v1/auth/employee/login`, async ({ request }) => {
     const body = await request.json() as { initials: string; pin: string };
 
     if (body.initials === 'JD' && body.pin === '1234') {
@@ -76,7 +80,6 @@ export const handlers = [
         status: 'success',
         data: {
           ok: true,
-          token: 'mock-employee-token',
           expiresAt: new Date(Date.now() + 3600000).toISOString(),
           user: {
             id: mockEmployee.id,
@@ -95,7 +98,7 @@ export const handlers = [
     );
   }),
 
-  http.post(`${API_URL}/api/auth/admin/login`, async ({ request }) => {
+  http.post(`${API_URL}/api/v1/auth/admin/login`, async ({ request }) => {
     const body = await request.json() as { email: string; password: string };
 
     if (body.email === 'admin@example.com' && body.password === 'password123') {
@@ -103,7 +106,6 @@ export const handlers = [
         status: 'success',
         data: {
           ok: true,
-          token: 'mock-admin-token',
           expiresAt: new Date(Date.now() + 3600000).toISOString(),
           user: {
             id: mockAdmin.id,
@@ -121,16 +123,15 @@ export const handlers = [
     );
   }),
 
-  http.post(`${API_URL}/api/auth/logout`, () => {
+  http.post(`${API_URL}/api/v1/auth/logout`, () => {
     return HttpResponse.json({ status: 'success' });
   }),
 
-  http.post(`${API_URL}/api/auth/refresh`, () => {
+  http.post(`${API_URL}/api/v1/auth/refresh`, () => {
     return HttpResponse.json({
       status: 'success',
       data: {
         ok: true,
-        token: 'mock-refreshed-token',
         expiresAt: new Date(Date.now() + 3600000).toISOString(),
         user: {
           id: mockEmployee.id,
@@ -142,8 +143,22 @@ export const handlers = [
     });
   }),
 
+  http.get(`${API_URL}/api/v1/auth/session`, () => {
+    return HttpResponse.json({
+      status: 'success',
+      data: {
+        user: {
+          id: mockEmployee.id,
+          type: 'EMPLOYEE',
+          name: mockEmployee.full_name,
+          initials: mockEmployee.initials,
+        },
+      },
+    });
+  }),
+
   // Punch endpoints
-  http.post(`${API_URL}/api/punch`, async ({ request }) => {
+  http.post(`${API_URL}/api/v1/punches`, async ({ request }) => {
     const body = await request.json() as { actionType: string };
 
     return HttpResponse.json({
@@ -160,7 +175,7 @@ export const handlers = [
     });
   }),
 
-  http.get(`${API_URL}/api/punch`, ({ request }) => {
+  http.get(`${API_URL}/api/v1/punches`, ({ request }) => {
     const url = new URL(request.url);
     const date = url.searchParams.get('date');
 
@@ -174,7 +189,7 @@ export const handlers = [
     });
   }),
 
-  http.get(`${API_URL}/api/punch/history`, ({ request }) => {
+  http.get(`${API_URL}/api/v1/punches/history`, ({ request }) => {
     const url = new URL(request.url);
     const page = parseInt(url.searchParams.get('page') ?? '1');
 
@@ -188,14 +203,64 @@ export const handlers = [
   }),
 
   // Employee endpoints
-  http.get(`${API_URL}/api/employees`, () => {
+  http.get(`${API_URL}/api/v1/admin/employees`, () => {
     return HttpResponse.json({
       status: 'success',
-      data: [mockEmployee],
+      data: {
+        items: [mockEmployee],
+        total: 1,
+        limit: 50,
+        offset: 0,
+        nextOffset: null,
+      },
     });
   }),
 
-  http.get(`${API_URL}/api/employees/:id`, ({ params }) => {
+  http.get(`${API_URL}/api/v1/employees/me/today`, () => {
+    return HttpResponse.json({
+      status: 'success',
+      data: {
+        date: '2024-01-15',
+        entries: mockTimeEntries,
+        summary: null,
+        reminders: [],
+        settings: {
+          feature_clock_enabled: true,
+          feature_lunch_enabled: true,
+          feature_breaks_enabled: true,
+          feature_comments_enabled: true,
+          feature_gps_enabled: false,
+          lunch_minimum_minutes: 30,
+        },
+      },
+    });
+  }),
+
+  http.get(`${API_URL}/api/v1/employees/me/history`, () => {
+    return HttpResponse.json({
+      status: 'success',
+      data: {
+        items: mockTimeEntries,
+        total: mockTimeEntries.length,
+        limit: 50,
+        offset: 0,
+        nextOffset: null,
+      },
+    });
+  }),
+
+  http.get(`${API_URL}/api/v1/settings/geofence`, () => {
+    return HttpResponse.json({
+      status: 'success',
+      data: {
+        enabled: false,
+        mode: 'warn',
+        locations: [],
+      },
+    });
+  }),
+
+  http.get(`${API_URL}/api/v1/admin/employees/:id`, ({ params }) => {
     if (params.id === mockEmployee.id) {
       return HttpResponse.json({
         status: 'success',
@@ -208,7 +273,7 @@ export const handlers = [
     );
   }),
 
-  http.post(`${API_URL}/api/employees`, async ({ request }) => {
+  http.post(`${API_URL}/api/v1/admin/employees`, async ({ request }) => {
     const body = await request.json() as Record<string, unknown>;
     return HttpResponse.json({
       status: 'success',
@@ -222,37 +287,58 @@ export const handlers = [
   }),
 
   // Compliance endpoints
-  http.get(`${API_URL}/api/compliance/dashboard`, () => {
+  http.get(`${API_URL}/api/v1/admin/compliance/dashboard`, () => {
     return HttpResponse.json({
       status: 'success',
       data: mockComplianceStats,
     });
   }),
 
-  http.get(`${API_URL}/api/compliance/violations`, () => {
+  http.get(`${API_URL}/api/v1/admin/compliance/violations`, () => {
     return HttpResponse.json({
       status: 'success',
       data: [],
     });
   }),
 
-  http.get(`${API_URL}/api/compliance/alerts`, () => {
+  http.get(`${API_URL}/api/v1/admin/compliance/alerts`, () => {
     return HttpResponse.json({
       status: 'success',
       data: mockComplianceStats.alerts,
     });
   }),
 
+  http.get(`${API_URL}/api/v1/admin/compliance/waivers`, () => {
+    return HttpResponse.json({
+      status: 'success',
+      data: [],
+    });
+  }),
+
+  http.get(`${API_URL}/api/v1/admin/compliance/attestations`, () => {
+    return HttpResponse.json({
+      status: 'success',
+      data: [],
+    });
+  }),
+
   // Certification endpoints
-  http.post(`${API_URL}/api/certifications`, () => {
+  http.post(`${API_URL}/api/v1/certifications`, () => {
     return HttpResponse.json({
       status: 'success',
       data: { certified: true },
     });
   }),
 
+  http.get(`${API_URL}/api/v1/certifications/pending`, () => {
+    return HttpResponse.json({
+      status: 'success',
+      data: null,
+    });
+  }),
+
   // Settings endpoints
-  http.get(`${API_URL}/api/settings`, () => {
+  http.get(`${API_URL}/api/v1/admin/settings`, () => {
     return HttpResponse.json({
       status: 'success',
       data: {
@@ -271,7 +357,7 @@ export const handlers = [
     });
   }),
 
-  http.put(`${API_URL}/api/settings`, async ({ request }) => {
+  http.put(`${API_URL}/api/v1/admin/settings`, async ({ request }) => {
     const body = await request.json();
     return HttpResponse.json({
       status: 'success',
@@ -280,31 +366,26 @@ export const handlers = [
   }),
 
   // Audit log endpoints
-  http.get(`${API_URL}/api/audit`, () => {
+  http.get(`${API_URL}/api/v1/admin/audit-log`, () => {
     return HttpResponse.json({
       status: 'success',
-      data: {
-        logs: [
-          {
-            id: 'log-1',
-            actor_type: 'EMPLOYEE',
-            actor_id: 'emp-1',
-            actor_identifier: 'JD',
-            action: 'LOGIN',
-            details: null,
-            ip_address: '127.0.0.1',
-            created_at: '2024-01-15T08:00:00Z',
-          },
-        ],
-        total: 1,
-        page: 1,
-        limit: 50,
-      },
+      data: [
+        {
+          id: 'log-1',
+          actor_type: 'EMPLOYEE',
+          actor_id: 'emp-1',
+          actor_identifier: 'JD',
+          action: 'LOGIN',
+          details: null,
+          ip_address: '127.0.0.1',
+          created_at: '2024-01-15T08:00:00Z',
+        },
+      ],
     });
   }),
 
   // Waiver endpoints
-  http.post(`${API_URL}/api/waivers`, () => {
+  http.post(`${API_URL}/api/v1/waivers`, () => {
     return HttpResponse.json({
       status: 'success',
       data: {
@@ -314,7 +395,7 @@ export const handlers = [
     });
   }),
 
-  http.get(`${API_URL}/api/waivers`, () => {
+  http.get(`${API_URL}/api/v1/waivers`, () => {
     return HttpResponse.json({
       status: 'success',
       data: [],
@@ -322,7 +403,7 @@ export const handlers = [
   }),
 
   // Attestation endpoints
-  http.post(`${API_URL}/api/attestations`, () => {
+  http.post(`${API_URL}/api/v1/attestations`, () => {
     return HttpResponse.json({
       status: 'success',
       data: {
@@ -332,7 +413,7 @@ export const handlers = [
     });
   }),
 
-  http.get(`${API_URL}/api/attestations`, () => {
+  http.get(`${API_URL}/api/v1/attestations`, () => {
     return HttpResponse.json({
       status: 'success',
       data: [],
@@ -340,7 +421,7 @@ export const handlers = [
   }),
 
   // Reports endpoints
-  http.get(`${API_URL}/api/reports/:type`, () => {
+  http.get(`${API_URL}/api/v1/admin/reports/:type`, () => {
     return new HttpResponse('id,name,date\n1,Test,2024-01-15', {
       headers: {
         'Content-Type': 'text/csv',
@@ -349,22 +430,28 @@ export const handlers = [
   }),
 
   // Admin entries endpoints
-  http.get(`${API_URL}/api/admin/entries`, () => {
+  http.get(`${API_URL}/api/v1/admin/entries`, () => {
     return HttpResponse.json({
       status: 'success',
-      data: mockTimeEntries,
+      data: {
+        items: mockTimeEntries,
+        total: mockTimeEntries.length,
+        limit: 200,
+        offset: 0,
+        nextOffset: null,
+      },
     });
   }),
 
   // Corrections endpoints
-  http.get(`${API_URL}/api/corrections`, () => {
+  http.get(`${API_URL}/api/v1/admin/entries/corrections`, () => {
     return HttpResponse.json({
       status: 'success',
       data: [],
     });
   }),
 
-  http.post(`${API_URL}/api/corrections`, () => {
+  http.post(`${API_URL}/api/v1/admin/entries/:id/corrections`, () => {
     return HttpResponse.json({
       status: 'success',
       data: {
@@ -374,17 +461,34 @@ export const handlers = [
     });
   }),
 
-  http.put(`${API_URL}/api/corrections/:id/approve`, () => {
+  http.post(`${API_URL}/api/v1/admin/entries/corrections`, () => {
+    return HttpResponse.json({
+      status: 'success',
+      data: {
+        id: `correction-${Date.now()}`,
+        status: 'PENDING',
+      },
+    });
+  }),
+
+  http.post(`${API_URL}/api/v1/admin/entries/corrections/:id/approve`, () => {
     return HttpResponse.json({
       status: 'success',
       data: { status: 'APPROVED' },
     });
   }),
 
-  http.put(`${API_URL}/api/corrections/:id/reject`, () => {
+  http.post(`${API_URL}/api/v1/admin/entries/corrections/:id/reject`, () => {
     return HttpResponse.json({
       status: 'success',
       data: { status: 'REJECTED' },
+    });
+  }),
+
+  http.post(`${API_URL}/api/v1/admin/entries/corrections/:id/apply`, () => {
+    return HttpResponse.json({
+      status: 'success',
+      data: { status: 'APPLIED' },
     });
   }),
 ];

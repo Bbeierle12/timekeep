@@ -49,23 +49,19 @@ export type Attestation = {
 };
 
 export async function signWaiver(
-  payload: SignWaiverPayload,
-  token: string
+  payload: SignWaiverPayload
 ): Promise<Waiver> {
-  return apiRequest<Waiver>('/api/waiver', {
+  return apiRequest<Waiver>('/api/v1/waivers', {
     method: 'POST',
-    body: JSON.stringify(payload),
-    token
+    body: JSON.stringify(payload)
   });
 }
 
 export async function signAttestation(
-  payload: SignAttestationPayload,
-  token: string
+  payload: SignAttestationPayload
 ): Promise<Attestation> {
-  return apiRequest<Attestation>('/api/attestation', {
+  return apiRequest<Attestation>('/api/v1/attestations', {
     method: 'POST',
-    body: JSON.stringify(payload),
-    token
+    body: JSON.stringify(payload)
   });
 }

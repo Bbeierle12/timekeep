@@ -1,18 +1,44 @@
 import { Router } from 'express';
-import { requireAuth } from '../middleware/auth';
-import { requireEmployee } from '../middleware/employeeAuth';
-import { timeEntryService } from '../services/timeEntry.service';
-import { employeeService } from '../services/employee.service';
-import { dailySummaryService } from '../services/dailySummary.service';
-import { reminderService } from '../services/reminder.service';
-import { certificationService } from '../services/certification.service';
-import { auditService } from '../services/audit.service';
 import { z } from 'zod';
-import { getSettingsRow } from '../services/settings.service';
+import { requireAuth } from '../../middleware/auth';
+import { requireEmployee } from '../../middleware/employeeAuth';
+import { timeEntryService } from '../../services/timeEntry.service';
+import { employeeService } from '../../services/employee.service';
+import { dailySummaryService } from '../../services/dailySummary.service';
+import { reminderService } from '../../services/reminder.service';
+import { certificationService } from '../../services/certification.service';
+import { auditService } from '../../services/audit.service';
+import { getSettingsRow } from '../../services/settings.service';
 
 const router = Router();
 
-router.get('/today', requireAuth, requireEmployee, async (req, res) => {
+const historyQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(200).optional(),
+  offset: z.coerce.number().int().min(0).optional()
+});
+
+const correctionSchema = z.object({
+  workDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  note: z.string().min(3).max(1000)
+});
+
+router.get('/me', requireAuth, requireEmployee, async (req, res) => {
+  const employeeId = req.user?.id;
+  if (!employeeId) {
+    res.status(401).json({ status: 'error', message: 'Missing auth context' });
+    return;
+  }
+
+  const employee = await employeeService.getById(employeeId);
+  if (!employee) {
+    res.status(404).json({ status: 'error', message: 'Employee not found' });
+    return;
+  }
+
+  res.json({ status: 'success', data: employee });
+});
+
+router.get('/me/today', requireAuth, requireEmployee, async (req, res) => {
   const employeeId = req.user?.id;
   if (!employeeId) {
     res.status(401).json({ status: 'error', message: 'Missing auth context' });
@@ -60,12 +86,7 @@ router.get('/today', requireAuth, requireEmployee, async (req, res) => {
   });
 });
 
-const historyQuerySchema = z.object({
-  limit: z.coerce.number().int().min(1).max(200).optional(),
-  offset: z.coerce.number().int().min(0).optional()
-});
-
-router.get('/history', requireAuth, requireEmployee, async (req, res) => {
+router.get('/me/history', requireAuth, requireEmployee, async (req, res) => {
   const parsed = historyQuerySchema.safeParse(req.query);
   if (!parsed.success) {
     res.status(400).json({ status: 'error', message: 'Invalid query' });
@@ -97,28 +118,7 @@ router.get('/history', requireAuth, requireEmployee, async (req, res) => {
   });
 });
 
-router.get('/me', requireAuth, requireEmployee, async (req, res) => {
-  const employeeId = req.user?.id;
-  if (!employeeId) {
-    res.status(401).json({ status: 'error', message: 'Missing auth context' });
-    return;
-  }
-
-  const employee = await employeeService.getById(employeeId);
-  if (!employee) {
-    res.status(404).json({ status: 'error', message: 'Employee not found' });
-    return;
-  }
-
-  res.json({ status: 'success', data: employee });
-});
-
-const correctionSchema = z.object({
-  workDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  note: z.string().min(3).max(1000)
-});
-
-router.post('/correction-request', requireAuth, requireEmployee, async (req, res) => {
+router.post('/me/corrections', requireAuth, requireEmployee, async (req, res) => {
   const parsed = correctionSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ status: 'error', message: 'Invalid payload' });

@@ -57,7 +57,7 @@ const reports: ReportConfig[] = [
 ];
 
 export default function AdminReports() {
-  const { token } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [dateRange, setDateRange] = useState({
     start: getDefaultStartDate(),
     end: new Date().toISOString().split('T')[0]
@@ -66,13 +66,13 @@ export default function AdminReports() {
   const [error, setError] = useState<string | null>(null);
 
   const handleDownload = async (reportType: ReportType) => {
-    if (!token) return;
+    if (!isAuthenticated) return;
 
     setDownloading(reportType);
     setError(null);
 
     try {
-      await downloadAndSaveReport(reportType, dateRange, token);
+      await downloadAndSaveReport(reportType, dateRange);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to download report');
     } finally {

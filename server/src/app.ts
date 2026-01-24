@@ -37,6 +37,7 @@ app.use('/api', globalRateLimiter);
 
 // CSRF token endpoint (must be before CSRF protection)
 app.get('/api/csrf-token', getCsrfToken);
+app.get('/api/v1/csrf-token', getCsrfToken);
 
 // Apply CSRF protection to state-changing API requests
 app.use('/api', csrfProtection);

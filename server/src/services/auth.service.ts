@@ -43,6 +43,41 @@ function addMinutes(date: Date, minutes: number) {
 }
 
 export const authService = {
+  async getSessionUser(params: {
+    userId: string;
+    userType: 'ADMIN' | 'EMPLOYEE';
+  }): Promise<AuthSuccess['user'] | null> {
+    if (params.userType === 'EMPLOYEE') {
+      const empResult = await pool.query(
+        'SELECT id, full_name, initials, is_active FROM employees WHERE id = $1',
+        [params.userId]
+      );
+      if (empResult.rowCount === 0 || !empResult.rows[0].is_active) {
+        return null;
+      }
+      return {
+        id: empResult.rows[0].id,
+        type: 'EMPLOYEE',
+        name: empResult.rows[0].full_name,
+        initials: empResult.rows[0].initials
+      };
+    }
+
+    const adminResult = await pool.query(
+      'SELECT id, name, role, is_active FROM admins WHERE id = $1',
+      [params.userId]
+    );
+    if (adminResult.rowCount === 0 || !adminResult.rows[0].is_active) {
+      return null;
+    }
+
+    return {
+      id: adminResult.rows[0].id,
+      type: 'ADMIN',
+      name: adminResult.rows[0].name,
+      role: adminResult.rows[0].role
+    };
+  },
   async loginEmployee(params: {
     initials: string;
     pin: string;

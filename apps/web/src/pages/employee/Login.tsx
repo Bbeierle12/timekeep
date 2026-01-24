@@ -38,7 +38,7 @@ export default function EmployeeLogin() {
     try {
       const response = await loginEmployee(data.initials.toUpperCase(), data.pin);
       const user = toUser(response.user);
-      login(response.token, user, new Date(response.expiresAt));
+      login(user);
 
       // Check if there's a pending certification
       if (response.pendingCertification) {

@@ -70,14 +70,14 @@ const tabs: { id: SettingsTab; label: string }[] = [
 ];
 
 export default function AdminSettings() {
-  const { token } = useAuth();
+  const { isAuthenticated } = useAuth();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
 
   const { data: settings, isLoading } = useQuery({
     queryKey: ['settings'],
-    queryFn: () => fetchSettings(token!),
-    enabled: !!token
+    queryFn: () => fetchSettings(),
+    enabled: isAuthenticated
   });
 
   const {
@@ -98,7 +98,7 @@ export default function AdminSettings() {
   }, [settings, reset]);
 
   const updateMutation = useMutation({
-    mutationFn: (data: Partial<SettingsForm>) => updateSettings(data, token!),
+    mutationFn: (data: Partial<SettingsForm>) => updateSettings(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['settings'] });
     }

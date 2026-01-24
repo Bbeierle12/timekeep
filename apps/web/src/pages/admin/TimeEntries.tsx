@@ -27,6 +27,10 @@ const entryTypeLabels: Record<string, string> = {
   CLOCK_OUT: 'Clock Out',
   LUNCH_START: 'Lunch Start',
   LUNCH_END: 'Lunch End',
+  SECOND_LUNCH_START: 'Second Lunch Start',
+  SECOND_LUNCH_END: 'Second Lunch End',
+  THIRD_LUNCH_START: 'Third Lunch Start',
+  THIRD_LUNCH_END: 'Third Lunch End',
   BREAK_START: 'Break Start',
   BREAK_END: 'Break End'
 };
@@ -36,12 +40,16 @@ const entryTypeColors: Record<string, string> = {
   CLOCK_OUT: 'bg-red-500/20 text-red-400',
   LUNCH_START: 'bg-amber-500/20 text-amber-400',
   LUNCH_END: 'bg-amber-500/20 text-amber-400',
+  SECOND_LUNCH_START: 'bg-amber-500/20 text-amber-400',
+  SECOND_LUNCH_END: 'bg-amber-500/20 text-amber-400',
+  THIRD_LUNCH_START: 'bg-amber-500/20 text-amber-400',
+  THIRD_LUNCH_END: 'bg-amber-500/20 text-amber-400',
   BREAK_START: 'bg-blue-500/20 text-blue-400',
   BREAK_END: 'bg-blue-500/20 text-blue-400'
 };
 
 export default function AdminTimeEntries() {
-  const { token } = useAuth();
+  const { isAuthenticated } = useAuth();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -73,28 +81,28 @@ export default function AdminTimeEntries() {
   const [employeeFilter, setEmployeeFilter] = useState(searchParams.get('employee') || '');
 
   // Fetch employees for the filter dropdown
-  const { data: employees } = useQuery({
+  const { data: employeesResponse } = useQuery({
     queryKey: ['employees', { status: 'active' }],
-    queryFn: () => listEmployees({ status: 'active' }, token!),
-    enabled: !!token
+    queryFn: () => listEmployees({ status: 'active' }),
+    enabled: isAuthenticated
   });
 
   // Fetch entries
-  const { data: entries, isLoading: entriesLoading } = useQuery({
+  const { data: entriesResponse, isLoading: entriesLoading } = useQuery({
     queryKey: ['entries', { date: dateFilter, employeeId: employeeFilter }],
-    queryFn: () => fetchEntries({ date: dateFilter, employeeId: employeeFilter || undefined }, token!),
-    enabled: !!token
+    queryFn: () => fetchEntries({ date: dateFilter, employeeId: employeeFilter || undefined }),
+    enabled: isAuthenticated
   });
 
   // Fetch pending corrections
   const { data: corrections, isLoading: correctionsLoading } = useQuery({
     queryKey: ['corrections', { status: 'PENDING' }],
-    queryFn: () => fetchCorrections({ status: 'PENDING' }, token!),
-    enabled: !!token && activeTab === 'corrections'
+    queryFn: () => fetchCorrections({ status: 'PENDING' }),
+    enabled: isAuthenticated && activeTab === 'corrections'
   });
 
   const approveMutation = useMutation({
-    mutationFn: (id: string) => approveCorrection(id, token!),
+    mutationFn: (id: string) => approveCorrection(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['corrections'] });
       setSelectedCorrection(null);
@@ -103,7 +111,7 @@ export default function AdminTimeEntries() {
 
   const rejectMutation = useMutation({
     mutationFn: ({ id, reason }: { id: string; reason: string }) =>
-      rejectCorrection(id, reason, token!),
+      rejectCorrection(id, reason),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['corrections'] });
       setSelectedCorrection(null);
@@ -112,7 +120,7 @@ export default function AdminTimeEntries() {
   });
 
   const applyMutation = useMutation({
-    mutationFn: (id: string) => applyCorrection(id, token!),
+    mutationFn: (id: string) => applyCorrection(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['corrections'] });
       queryClient.invalidateQueries({ queryKey: ['entries'] });
@@ -122,7 +130,7 @@ export default function AdminTimeEntries() {
 
   const updateMutation = useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: UpdateEntryPayload }) =>
-      updateEntry(id, payload, token!),
+      updateEntry(id, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['entries'] });
       setEditingEntry(null);
@@ -131,7 +139,7 @@ export default function AdminTimeEntries() {
   });
 
   const createMutation = useMutation({
-    mutationFn: (payload: CreateEntryPayload) => createEntry(payload, token!),
+    mutationFn: (payload: CreateEntryPayload) => createEntry(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['entries'] });
       setShowCreateModal(false);
@@ -189,8 +197,9 @@ export default function AdminTimeEntries() {
   };
 
   // Group entries by employee
+  const entries = entriesResponse?.items ?? [];
+
   const groupedEntries = useMemo(() => {
-    if (!entries) return {};
     return entries.reduce((acc, entry) => {
       const key = entry.employee_id;
       if (!acc[key]) {
@@ -271,7 +280,7 @@ export default function AdminTimeEntries() {
                 className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-sky-500"
               >
                 <option value="">All Employees</option>
-                {employees?.map((emp) => (
+                {employeesResponse?.items.map((emp) => (
                   <option key={emp.id} value={emp.id}>
                     {emp.full_name} ({emp.initials})
                   </option>
@@ -305,7 +314,7 @@ export default function AdminTimeEntries() {
             <div className="flex items-center justify-center h-64">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-500" />
             </div>
-          ) : !entries?.length ? (
+          ) : entries.length === 0 ? (
             <Card className="p-8 text-center">
               <p className="text-slate-400">No time entries found for the selected date.</p>
             </Card>
@@ -549,7 +558,7 @@ export default function AdminTimeEntries() {
               className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-sky-500"
             >
               <option value="">Select employee...</option>
-              {employees?.map((emp) => (
+              {employeesResponse?.items.map((emp) => (
                 <option key={emp.id} value={emp.id}>
                   {emp.full_name} ({emp.initials})
                 </option>
@@ -570,6 +579,10 @@ export default function AdminTimeEntries() {
               <option value="CLOCK_OUT">Clock Out</option>
               <option value="LUNCH_START">Lunch Start</option>
               <option value="LUNCH_END">Lunch End</option>
+              <option value="SECOND_LUNCH_START">Second Lunch Start</option>
+              <option value="SECOND_LUNCH_END">Second Lunch End</option>
+              <option value="THIRD_LUNCH_START">Third Lunch Start</option>
+              <option value="THIRD_LUNCH_END">Third Lunch End</option>
               <option value="BREAK_ACK_1">Break 1 Taken</option>
               <option value="BREAK_ACK_2">Break 2 Taken</option>
               <option value="BREAK_ACK_3">Break 3 Taken</option>

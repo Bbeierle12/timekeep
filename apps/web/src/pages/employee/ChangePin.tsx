@@ -20,17 +20,16 @@ const changePinSchema = z.object({
 
 type ChangePinFormData = z.infer<typeof changePinSchema>;
 
-async function changePin(currentPin: string, newPin: string, token: string): Promise<void> {
-  await apiRequest<{ status: string }>('/api/auth/employee/change-pin', {
+async function changePin(currentPin: string, newPin: string): Promise<void> {
+  await apiRequest<{ status: string }>('/api/v1/auth/employee/change-pin', {
     method: 'POST',
-    body: JSON.stringify({ currentPin, newPin }),
-    token
+    body: JSON.stringify({ currentPin, newPin })
   });
 }
 
 export default function ChangePin() {
   const navigate = useNavigate();
-  const { token } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -45,13 +44,13 @@ export default function ChangePin() {
   });
 
   const onSubmit = async (data: ChangePinFormData) => {
-    if (!token) return;
+    if (!isAuthenticated) return;
 
     setError(null);
     setIsSubmitting(true);
 
     try {
-      await changePin(data.currentPin, data.newPin, token);
+      await changePin(data.currentPin, data.newPin);
       setSuccess(true);
       reset();
     } catch (err) {

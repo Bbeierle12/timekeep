@@ -38,7 +38,7 @@ export default function AdminLogin() {
     try {
       const response = await loginAdmin(data.email, data.password);
       const user = toUser(response.user);
-      login(response.token, user, new Date(response.expiresAt));
+      login(user);
       navigate(routes.admin.dashboard);
     } catch (err) {
       if (err instanceof ApiError) {

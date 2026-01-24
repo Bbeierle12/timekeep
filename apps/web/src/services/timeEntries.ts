@@ -1,10 +1,14 @@
-import { apiRequest } from './api';
+import { apiRequest, type PagedResponse } from './api';
 
 export type ActionType =
   | 'CLOCK_IN'
   | 'CLOCK_OUT'
   | 'LUNCH_START'
   | 'LUNCH_END'
+  | 'SECOND_LUNCH_START'
+  | 'SECOND_LUNCH_END'
+  | 'THIRD_LUNCH_START'
+  | 'THIRD_LUNCH_END'
   | 'BREAK_ACK_1'
   | 'BREAK_ACK_2'
   | 'BREAK_ACK_3'
@@ -71,20 +75,19 @@ export type PunchInput = {
   gpsUnavailable?: boolean;
 };
 
-export async function fetchToday(token: string): Promise<TodayResponse> {
-  return apiRequest<TodayResponse>('/api/today', { token });
+export async function fetchToday(): Promise<TodayResponse> {
+  return apiRequest<TodayResponse>('/api/v1/employees/me/today');
 }
 
-export async function recordPunch(punch: PunchInput, token: string): Promise<TimeEntry> {
-  return apiRequest<TimeEntry>('/api/punch', {
+export async function recordPunch(punch: PunchInput): Promise<TimeEntry> {
+  return apiRequest<TimeEntry>('/api/v1/punches', {
     method: 'POST',
-    body: JSON.stringify(punch),
-    token
+    body: JSON.stringify(punch)
   });
 }
 
-export async function fetchHistory(token: string, limit = 100): Promise<TimeEntry[]> {
-  return apiRequest<TimeEntry[]>(`/api/history?limit=${limit}`, { token });
+export async function fetchHistory(limit = 100, offset = 0): Promise<PagedResponse<TimeEntry>> {
+  return apiRequest<PagedResponse<TimeEntry>>(`/api/v1/employees/me/history?limit=${limit}&offset=${offset}`);
 }
 
 // Admin time entry functions
@@ -115,44 +118,37 @@ export type CreateEntryPayload = {
   reason: string;
 };
 
-export async function fetchAdminEntries(token: string, limit = 200): Promise<AdminTimeEntry[]> {
-  return apiRequest<AdminTimeEntry[]>(`/api/admin/entries?limit=${limit}`, { token });
+export async function fetchAdminEntries(limit = 200, offset = 0): Promise<PagedResponse<AdminTimeEntry>> {
+  return apiRequest<PagedResponse<AdminTimeEntry>>(`/api/v1/admin/entries?limit=${limit}&offset=${offset}`);
 }
 
-export async function fetchEntriesForDate(date: string, token: string): Promise<AdminTimeEntry[]> {
-  return apiRequest<AdminTimeEntry[]>(`/api/admin/entries/daily/${date}`, { token });
+export async function fetchEntriesForDate(date: string): Promise<AdminTimeEntry[]> {
+  return apiRequest<AdminTimeEntry[]>(`/api/v1/admin/entries/daily/${date}`);
 }
 
 export async function fetchEntriesForEmployee(
   employeeId: string,
-  token: string,
   date?: string
 ): Promise<AdminTimeEntry[]> {
   const query = date ? `?date=${date}` : '';
-  return apiRequest<AdminTimeEntry[]>(`/api/admin/entries/employee/${employeeId}${query}`, {
-    token
-  });
+  return apiRequest<AdminTimeEntry[]>(`/api/v1/admin/entries/employee/${employeeId}${query}`);
 }
 
 export async function updateTimeEntry(
   id: string,
-  payload: UpdateEntryPayload,
-  token: string
+  payload: UpdateEntryPayload
 ): Promise<AdminTimeEntry> {
-  return apiRequest<AdminTimeEntry>(`/api/admin/entries/${id}`, {
+  return apiRequest<AdminTimeEntry>(`/api/v1/admin/entries/${id}`, {
     method: 'PUT',
-    body: JSON.stringify(payload),
-    token
+    body: JSON.stringify(payload)
   });
 }
 
 export async function createTimeEntry(
-  payload: CreateEntryPayload,
-  token: string
+  payload: CreateEntryPayload
 ): Promise<AdminTimeEntry> {
-  return apiRequest<AdminTimeEntry>('/api/admin/entries', {
+  return apiRequest<AdminTimeEntry>('/api/v1/admin/entries', {
     method: 'POST',
-    body: JSON.stringify(payload),
-    token
+    body: JSON.stringify(payload)
   });
 }

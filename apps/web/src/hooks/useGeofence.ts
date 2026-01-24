@@ -47,7 +47,7 @@ function toRad(deg: number): number {
 }
 
 export function useGeofence() {
-  const { token } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [currentPosition, setCurrentPosition] = useState<GeolocationPosition | null>(null);
   const [positionError, setPositionError] = useState<string | null>(null);
   const [isGettingLocation, setIsGettingLocation] = useState(false);
@@ -56,10 +56,10 @@ export function useGeofence() {
   const { data: settings } = useQuery({
     queryKey: ['geofence-settings'],
     queryFn: async () => {
-      const result = await apiRequest<GeofenceSettings>('/api/settings/geofence', { token: token ?? undefined });
+      const result = await apiRequest<GeofenceSettings>('/api/v1/settings/geofence');
       return result;
     },
-    enabled: !!token,
+    enabled: isAuthenticated,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 

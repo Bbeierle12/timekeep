@@ -9,7 +9,18 @@ import { fetchAuditLog, AuditEntry, AuditQueryParams } from '../../services/audi
 
 const actionCategories: Record<string, string[]> = {
   'Authentication': ['LOGIN', 'LOGOUT', 'LOGIN_FAILED', 'SESSION_EXPIRED'],
-  'Time Entries': ['CLOCK_IN', 'CLOCK_OUT', 'LUNCH_START', 'LUNCH_END', 'BREAK_START', 'BREAK_END'],
+  'Time Entries': [
+    'CLOCK_IN',
+    'CLOCK_OUT',
+    'LUNCH_START',
+    'LUNCH_END',
+    'SECOND_LUNCH_START',
+    'SECOND_LUNCH_END',
+    'THIRD_LUNCH_START',
+    'THIRD_LUNCH_END',
+    'BREAK_START',
+    'BREAK_END'
+  ],
   'Employees': ['EMPLOYEE_CREATED', 'EMPLOYEE_UPDATED', 'EMPLOYEE_DEACTIVATED', 'EMPLOYEE_REACTIVATED', 'PIN_RESET'],
   'Compliance': ['WAIVER_SIGNED', 'ATTESTATION_SIGNED', 'CERTIFICATION_COMPLETED', 'VIOLATION_CREATED'],
   'Corrections': ['CORRECTION_REQUESTED', 'CORRECTION_APPROVED', 'CORRECTION_REJECTED', 'CORRECTION_APPLIED'],
@@ -23,7 +34,7 @@ const actorTypeColors: Record<string, string> = {
 };
 
 export default function AdminAuditLog() {
-  const { token } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [filters, setFilters] = useState<AuditQueryParams>({
     limit: 50
   });
@@ -31,8 +42,8 @@ export default function AdminAuditLog() {
 
   const { data: auditEntries, isLoading, error } = useQuery({
     queryKey: ['audit-log', filters],
-    queryFn: () => fetchAuditLog(filters, token!),
-    enabled: !!token
+    queryFn: () => fetchAuditLog(filters),
+    enabled: isAuthenticated
   });
 
   const handleSearch = () => {

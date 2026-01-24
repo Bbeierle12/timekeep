@@ -5,7 +5,6 @@ export function useAuth() {
 
   return {
     user: context.user,
-    token: context.token,
     isLoading: context.isLoading,
     isAuthenticated: context.isAuthenticated,
     login: context.login,

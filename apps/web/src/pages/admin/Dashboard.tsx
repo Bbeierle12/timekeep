@@ -69,12 +69,12 @@ function AlertCard({ alert }: { alert: ComplianceAlert }) {
 }
 
 export default function AdminDashboard() {
-  const { token } = useAuth();
+  const { isAuthenticated } = useAuth();
 
   const { data: dashboard, isLoading, error } = useQuery({
     queryKey: ['compliance-dashboard'],
-    queryFn: () => fetchComplianceDashboard(undefined, token!),
-    enabled: !!token,
+    queryFn: () => fetchComplianceDashboard(undefined),
+    enabled: isAuthenticated,
     refetchInterval: 30000 // Refresh every 30 seconds
   });
 

@@ -20,7 +20,7 @@ import {
 type Tab = 'overview' | 'violations' | 'waivers' | 'attestations';
 
 export default function AdminCompliance() {
-  const { token } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const [dateRange, setDateRange] = useState({
     start: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
@@ -29,32 +29,32 @@ export default function AdminCompliance() {
 
   const { data: dashboard, isLoading: dashboardLoading } = useQuery({
     queryKey: ['compliance-dashboard'],
-    queryFn: () => fetchComplianceDashboard(undefined, token!),
-    enabled: !!token && activeTab === 'overview'
+    queryFn: () => fetchComplianceDashboard(undefined),
+    enabled: isAuthenticated && activeTab === 'overview'
   });
 
   const { data: alerts, isLoading: alertsLoading } = useQuery({
     queryKey: ['compliance-alerts'],
-    queryFn: () => fetchAlerts(undefined, token!),
-    enabled: !!token && activeTab === 'overview'
+    queryFn: () => fetchAlerts(undefined),
+    enabled: isAuthenticated && activeTab === 'overview'
   });
 
   const { data: violations, isLoading: violationsLoading } = useQuery({
     queryKey: ['violations', dateRange],
-    queryFn: () => fetchViolations({ start: dateRange.start, end: dateRange.end }, token!),
-    enabled: !!token && activeTab === 'violations'
+    queryFn: () => fetchViolations({ start: dateRange.start, end: dateRange.end }),
+    enabled: isAuthenticated && activeTab === 'violations'
   });
 
   const { data: waivers, isLoading: waiversLoading } = useQuery({
     queryKey: ['waivers', dateRange],
-    queryFn: () => fetchWaivers({ start: dateRange.start, end: dateRange.end }, token!),
-    enabled: !!token && activeTab === 'waivers'
+    queryFn: () => fetchWaivers({ start: dateRange.start, end: dateRange.end }),
+    enabled: isAuthenticated && activeTab === 'waivers'
   });
 
   const { data: attestations, isLoading: attestationsLoading } = useQuery({
     queryKey: ['attestations', dateRange],
-    queryFn: () => fetchAttestations({ start: dateRange.start, end: dateRange.end }, token!),
-    enabled: !!token && activeTab === 'attestations'
+    queryFn: () => fetchAttestations({ start: dateRange.start, end: dateRange.end }),
+    enabled: isAuthenticated && activeTab === 'attestations'
   });
 
   const tabs: { id: Tab; label: string }[] = [

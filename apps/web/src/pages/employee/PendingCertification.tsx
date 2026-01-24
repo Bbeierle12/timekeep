@@ -7,17 +7,20 @@ import { routes } from '../../routes';
 
 export default function PendingCertificationPage() {
   const navigate = useNavigate();
-  const { token, logout } = useAuth();
+  const { isAuthenticated, logout } = useAuth();
   const [certification, setCertification] = useState<PendingCertification | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadPendingCertification() {
-      if (!token) return;
+      if (!isAuthenticated) {
+        setIsLoading(false);
+        return;
+      }
 
       try {
-        const pending = await fetchPendingCertification(token);
+        const pending = await fetchPendingCertification();
         if (!pending) {
           // No pending certification, redirect to dashboard
           navigate(routes.employee.dashboard, { replace: true });
@@ -32,7 +35,7 @@ export default function PendingCertificationPage() {
     }
 
     loadPendingCertification();
-  }, [token, navigate]);
+  }, [isAuthenticated, navigate]);
 
   const handleSuccess = () => {
     // After successful certification, go to dashboard

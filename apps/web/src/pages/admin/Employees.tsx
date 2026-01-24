@@ -34,7 +34,7 @@ const createEmployeeSchema = z.object({
 type CreateEmployeeForm = z.infer<typeof createEmployeeSchema>;
 
 export default function AdminEmployees() {
-  const { token } = useAuth();
+  const { isAuthenticated } = useAuth();
   const queryClient = useQueryClient();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
@@ -53,14 +53,14 @@ export default function AdminEmployees() {
     }
   });
 
-  const { data: employees, isLoading } = useQuery({
+  const { data: employeesResponse, isLoading } = useQuery({
     queryKey: ['employees', filter],
-    queryFn: () => listEmployees(filter, token!),
-    enabled: !!token
+    queryFn: () => listEmployees(filter),
+    enabled: isAuthenticated
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: CreateEmployeePayload) => createEmployee(data, token!),
+    mutationFn: (data: CreateEmployeePayload) => createEmployee(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['employees'] });
       setShowCreateModal(false);
@@ -82,7 +82,7 @@ export default function AdminEmployees() {
     createMutation.mutate(payload);
   };
 
-  const filteredEmployees = employees?.filter((employee) => {
+  const filteredEmployees = employeesResponse?.items.filter((employee) => {
     if (!searchTerm) return true;
     const term = searchTerm.toLowerCase();
     return (

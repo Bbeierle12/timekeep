@@ -104,18 +104,18 @@ function CreateAdminModal({ onClose, onSubmit }: { onClose: () => void; onSubmit
 }
 
 export default function AdminAccounts() {
-  const { token } = useAuth();
+  const { isAuthenticated } = useAuth();
   const queryClient = useQueryClient();
   const [showCreateModal, setShowCreateModal] = useState(false);
 
   const { data: admins, isLoading, error } = useQuery({
     queryKey: ['admins'],
-    queryFn: () => listAdmins(token!),
-    enabled: !!token
+    queryFn: () => listAdmins(),
+    enabled: isAuthenticated
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: CreateAdminPayload) => createAdmin(data, token!),
+    mutationFn: (data: CreateAdminPayload) => createAdmin(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admins'] });
       setShowCreateModal(false);
@@ -124,14 +124,14 @@ export default function AdminAccounts() {
 
   const toggleActiveMutation = useMutation({
     mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) =>
-      updateAdmin(id, { isActive }, token!),
+      updateAdmin(id, { isActive }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admins'] });
     }
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => deleteAdmin(id, token!),
+    mutationFn: (id: string) => deleteAdmin(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admins'] });
     }

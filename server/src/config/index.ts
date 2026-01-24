@@ -18,20 +18,23 @@ function getCsrfSecret(): string {
   const secret = process.env.CSRF_SECRET;
   if (!secret) {
     if (process.env.NODE_ENV === 'production') {
-      console.warn('WARNING: CSRF_SECRET not set in production. CSRF protection is disabled.');
+      throw new Error('CSRF_SECRET must be set in production');
     }
     return 'dev_csrf_secret_not_for_production';
   }
   return secret;
 }
 
+const nodeEnv = process.env.NODE_ENV ?? 'development';
+
 export const config = {
   port: Number(process.env.PORT ?? 4000),
   databaseUrl: process.env.DATABASE_URL ?? '',
   jwtSecret: getJwtSecret(),
   csrfSecret: getCsrfSecret(),
-  nodeEnv: process.env.NODE_ENV ?? 'development',
+  nodeEnv,
   corsOrigins: process.env.CORS_ORIGINS?.split(',') ?? ['http://localhost:5173', 'http://localhost:3000'],
+  authCookieName: nodeEnv === 'production' ? '__Host-timekeep-session' : 'timekeep_session',
   // CSRF disabled by default in development, enabled by default in production
-  csrfEnabled: process.env.CSRF_ENABLED === 'true' || (process.env.NODE_ENV === 'production' && process.env.CSRF_ENABLED !== 'false')
+  csrfEnabled: process.env.CSRF_ENABLED === 'true' || (nodeEnv === 'production' && process.env.CSRF_ENABLED !== 'false')
 };

@@ -16,6 +16,10 @@ const ACTION_LABELS: Record<string, string> = {
   CLOCK_OUT: 'Clock Out',
   LUNCH_START: 'Lunch Start',
   LUNCH_END: 'Lunch End',
+  SECOND_LUNCH_START: 'Second Lunch Start',
+  SECOND_LUNCH_END: 'Second Lunch End',
+  THIRD_LUNCH_START: 'Third Lunch Start',
+  THIRD_LUNCH_END: 'Third Lunch End',
   BREAK_ACK_1: 'Break 1 Taken',
   BREAK_ACK_2: 'Break 2 Taken',
   BREAK_ACK_3: 'Break 3 Taken',
@@ -36,7 +40,7 @@ export default function CertificationForm({
   certification,
   onSuccess
 }: CertificationFormProps) {
-  const { token } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [acknowledged, setAcknowledged] = useState(false);
   const [requestCorrection, setRequestCorrection] = useState(false);
   const [correctionNote, setCorrectionNote] = useState('');
@@ -47,7 +51,7 @@ export default function CertificationForm({
   const { summary, entries, workDate, hasViolation, violationType } = certification;
 
   const handleSubmit = async () => {
-    if (!acknowledged || !token) return;
+    if (!acknowledged || !isAuthenticated) return;
     if (requestCorrection && !correctionNote.trim()) {
       setError('Please provide details for your correction request');
       return;
@@ -63,8 +67,7 @@ export default function CertificationForm({
           comment: comment.trim() || undefined,
           requestCorrection,
           correctionNote: requestCorrection ? correctionNote.trim() : undefined
-        },
-        token
+        }
       );
       onSuccess();
     } catch (err) {

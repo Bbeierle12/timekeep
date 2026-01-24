@@ -1,4 +1,4 @@
-import { apiRequest } from './api';
+import { apiRequest, type PagedResponse } from './api';
 
 export type TimeEntry = {
   id: string;
@@ -53,9 +53,8 @@ export type ListEntriesParams = {
 };
 
 export async function fetchEntries(
-  params: ListEntriesParams,
-  token: string
-): Promise<TimeEntry[]> {
+  params: ListEntriesParams
+): Promise<PagedResponse<TimeEntry>> {
   const searchParams = new URLSearchParams();
   if (params.date) searchParams.set('date', params.date);
   if (params.start) searchParams.set('start', params.start);
@@ -65,37 +64,34 @@ export async function fetchEntries(
   if (params.offset) searchParams.set('offset', String(params.offset));
 
   const query = searchParams.toString();
-  const url = `/api/admin/entries${query ? `?${query}` : ''}`;
+  const url = `/api/v1/admin/entries${query ? `?${query}` : ''}`;
 
-  return apiRequest<TimeEntry[]>(url, { token });
+  return apiRequest<PagedResponse<TimeEntry>>(url);
 }
 
 export async function fetchDailyEntries(
-  date: string,
-  token: string
+  date: string
 ): Promise<DailySummary> {
-  return apiRequest<DailySummary>(`/api/admin/entries/daily/${date}`, { token });
+  return apiRequest<DailySummary>(`/api/v1/admin/entries/daily/${date}`);
 }
 
 export async function fetchEmployeeEntries(
-  employeeId: string,
-  token: string
+  employeeId: string
 ): Promise<TimeEntry[]> {
-  return apiRequest<TimeEntry[]>(`/api/admin/entries/employee/${employeeId}`, { token });
+  return apiRequest<TimeEntry[]>(`/api/v1/admin/entries/employee/${employeeId}`);
 }
 
 export async function fetchCorrections(
-  params: { status?: string; limit?: number },
-  token: string
+  params: { status?: string; limit?: number }
 ): Promise<Correction[]> {
   const searchParams = new URLSearchParams();
   if (params.status) searchParams.set('status', params.status);
   if (params.limit) searchParams.set('limit', String(params.limit));
 
   const query = searchParams.toString();
-  const url = `/api/admin/entries/corrections${query ? `?${query}` : ''}`;
+  const url = `/api/v1/admin/entries/corrections${query ? `?${query}` : ''}`;
 
-  return apiRequest<Correction[]>(url, { token });
+  return apiRequest<Correction[]>(url);
 }
 
 export type RequestCorrectionPayload = {
@@ -105,45 +101,37 @@ export type RequestCorrectionPayload = {
 
 export async function requestCorrection(
   entryId: string,
-  payload: RequestCorrectionPayload,
-  token: string
+  payload: RequestCorrectionPayload
 ): Promise<Correction> {
-  return apiRequest<Correction>(`/api/admin/entries/${entryId}/corrections`, {
+  return apiRequest<Correction>(`/api/v1/admin/entries/${entryId}/corrections`, {
     method: 'POST',
-    body: JSON.stringify(payload),
-    token
+    body: JSON.stringify(payload)
   });
 }
 
 export async function approveCorrection(
-  correctionId: string,
-  token: string
+  correctionId: string
 ): Promise<Correction> {
-  return apiRequest<Correction>(`/api/admin/entries/corrections/${correctionId}/approve`, {
-    method: 'POST',
-    token
+  return apiRequest<Correction>(`/api/v1/admin/entries/corrections/${correctionId}/approve`, {
+    method: 'POST'
   });
 }
 
 export async function rejectCorrection(
   correctionId: string,
-  reason: string,
-  token: string
+  reason: string
 ): Promise<Correction> {
-  return apiRequest<Correction>(`/api/admin/entries/corrections/${correctionId}/reject`, {
+  return apiRequest<Correction>(`/api/v1/admin/entries/corrections/${correctionId}/reject`, {
     method: 'POST',
-    body: JSON.stringify({ reason }),
-    token
+    body: JSON.stringify({ reason })
   });
 }
 
 export async function applyCorrection(
-  correctionId: string,
-  token: string
+  correctionId: string
 ): Promise<Correction> {
-  return apiRequest<Correction>(`/api/admin/entries/corrections/${correctionId}/apply`, {
-    method: 'POST',
-    token
+  return apiRequest<Correction>(`/api/v1/admin/entries/corrections/${correctionId}/apply`, {
+    method: 'POST'
   });
 }
 
@@ -165,23 +153,19 @@ export type CreateEntryPayload = {
 
 export async function updateEntry(
   entryId: string,
-  payload: UpdateEntryPayload,
-  token: string
+  payload: UpdateEntryPayload
 ): Promise<TimeEntry> {
-  return apiRequest<TimeEntry>(`/api/admin/entries/${entryId}`, {
+  return apiRequest<TimeEntry>(`/api/v1/admin/entries/${entryId}`, {
     method: 'PUT',
-    body: JSON.stringify(payload),
-    token
+    body: JSON.stringify(payload)
   });
 }
 
 export async function createEntry(
-  payload: CreateEntryPayload,
-  token: string
+  payload: CreateEntryPayload
 ): Promise<TimeEntry> {
-  return apiRequest<TimeEntry>('/api/admin/entries', {
+  return apiRequest<TimeEntry>('/api/v1/admin/entries', {
     method: 'POST',
-    body: JSON.stringify(payload),
-    token
+    body: JSON.stringify(payload)
   });
 }

@@ -3,18 +3,18 @@ import { useAuth } from './useAuth';
 import { fetchToday, recordPunch, type PunchInput, type TodayResponse, type ActionType } from '../services/timeEntries';
 
 export function useTimeEntry() {
-  const { token } = useAuth();
+  const { isAuthenticated } = useAuth();
   const queryClient = useQueryClient();
 
   const todayQuery = useQuery({
     queryKey: ['today'],
-    queryFn: () => fetchToday(token!),
-    enabled: !!token,
+    queryFn: () => fetchToday(),
+    enabled: isAuthenticated,
     refetchInterval: 30000 // Refetch every 30 seconds
   });
 
   const punchMutation = useMutation({
-    mutationFn: (punch: PunchInput) => recordPunch(punch, token!),
+    mutationFn: (punch: PunchInput) => recordPunch(punch),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['today'] });
     }

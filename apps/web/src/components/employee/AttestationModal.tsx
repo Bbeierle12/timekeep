@@ -27,7 +27,7 @@ export default function AttestationModal({
   onClose,
   onSuccess
 }: AttestationModalProps) {
-  const { token } = useAuth();
+  const { isAuthenticated } = useAuth();
   const { requestLocation } = useGeolocation();
   const signaturePadRef = useRef<SignaturePadRef>(null);
 
@@ -52,7 +52,7 @@ export default function AttestationModal({
   };
 
   const handleSubmit = async () => {
-    if (!selectedOption || !hasSigned || !token) return;
+    if (!selectedOption || !hasSigned || !isAuthenticated) return;
     if (selectedOption === 'OPTION_A' && !optionASuboption) return;
 
     setIsSubmitting(true);
@@ -74,8 +74,7 @@ export default function AttestationModal({
           signatureImage,
           gpsLatitude: locationResult.coords?.latitude,
           gpsLongitude: locationResult.coords?.longitude
-        },
-        token
+        }
       );
 
       onSuccess();

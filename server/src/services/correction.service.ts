@@ -21,7 +21,7 @@ export type CorrectionApplyInput = {
 };
 
 export const correctionService = {
-  async list(params: { status?: string; limit?: number }) {
+  async list(params: { status?: string; limit?: number; offset?: number }) {
     const filters: string[] = [];
     const values: Array<string | number> = [];
 
@@ -32,7 +32,8 @@ export const correctionService = {
 
     const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
     const limit = params.limit ?? 200;
-    values.push(limit);
+    const offset = params.offset ?? 0;
+    values.push(limit, offset);
 
     const result = await pool.query(
       `SELECT c.id, c.time_entry_id, c.requested_by, c.request_reason, c.new_recorded_at,
@@ -43,7 +44,7 @@ export const correctionService = {
        JOIN time_entries te ON te.id = c.time_entry_id
        ${where}
        ORDER BY c.requested_at DESC
-       LIMIT $${values.length}`,
+       LIMIT $${values.length - 1} OFFSET $${values.length}`,
       values
     );
 
