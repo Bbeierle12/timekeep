@@ -1,7 +1,7 @@
-import type { InputHTMLAttributes } from 'react';
+import type { InputHTMLAttributes, ReactNode } from 'react';
 
 type CheckboxProps = InputHTMLAttributes<HTMLInputElement> & {
-  label: string;
+  label: ReactNode;
 };
 
 export default function Checkbox({ label, className = '', ...props }: CheckboxProps) {

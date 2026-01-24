@@ -95,11 +95,12 @@ export default function AdminTimeEntries() {
   });
 
   // Fetch pending corrections
-  const { data: corrections, isLoading: correctionsLoading } = useQuery({
+  const { data: correctionsResponse, isLoading: correctionsLoading } = useQuery({
     queryKey: ['corrections', { status: 'PENDING' }],
     queryFn: () => fetchCorrections({ status: 'PENDING' }),
     enabled: isAuthenticated && activeTab === 'corrections'
   });
+  const corrections = correctionsResponse?.items ?? [];
 
   const approveMutation = useMutation({
     mutationFn: (id: string) => approveCorrection(id),
@@ -254,7 +255,7 @@ export default function AdminTimeEntries() {
           }`}
         >
           Pending Corrections
-          {corrections && corrections.length > 0 && (
+          {corrections.length > 0 && (
             <span className="px-1.5 py-0.5 text-xs bg-amber-500/20 text-amber-400 rounded-full">
               {corrections.length}
             </span>
@@ -346,7 +347,7 @@ export default function AdminTimeEntries() {
             <div className="flex items-center justify-center h-64">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-500" />
             </div>
-          ) : !corrections?.length ? (
+          ) : corrections.length === 0 ? (
             <Card className="p-8 text-center">
               <p className="text-slate-400">No pending corrections.</p>
             </Card>

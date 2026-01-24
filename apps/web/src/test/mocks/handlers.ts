@@ -157,6 +157,29 @@ export const handlers = [
     });
   }),
 
+  // CCPA consent endpoints
+  http.get(`${API_URL}/api/v1/consent/location`, () => {
+    return HttpResponse.json({
+      status: 'success',
+      data: {
+        hasConsented: false,
+        consentedAt: null,
+        consentVersion: null,
+        requiresReconsent: true,
+      },
+    });
+  }),
+
+  http.post(`${API_URL}/api/v1/consent/location`, async () => {
+    return HttpResponse.json({
+      status: 'success',
+      data: {
+        success: true,
+        consentedAt: new Date().toISOString(),
+      },
+    });
+  }),
+
   // Punch endpoints
   http.post(`${API_URL}/api/v1/punches`, async ({ request }) => {
     const body = await request.json() as { actionType: string };
@@ -447,7 +470,13 @@ export const handlers = [
   http.get(`${API_URL}/api/v1/admin/entries/corrections`, () => {
     return HttpResponse.json({
       status: 'success',
-      data: [],
+      data: {
+        items: [],
+        total: 0,
+        limit: 200,
+        offset: 0,
+        nextOffset: null,
+      },
     });
   }),
 

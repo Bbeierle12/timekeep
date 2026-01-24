@@ -155,7 +155,7 @@ function OverviewTab({
   alerts,
   isLoading
 }: {
-  dashboard: ReturnType<typeof fetchComplianceDashboard> extends Promise<infer T> ? T : never;
+  dashboard: (ReturnType<typeof fetchComplianceDashboard> extends Promise<infer T> ? T : never) | undefined;
   alerts: ComplianceAlert[];
   isLoading: boolean;
 }) {

@@ -26,7 +26,7 @@ export function useCCPAConsent() {
   } = useQuery({
     queryKey: ['ccpa-consent', user?.id],
     queryFn: async () => {
-      const result = await apiRequest<ConsentStatus>('/api/consent/location');
+      const result = await apiRequest<ConsentStatus>('/api/v1/consent/location');
       return result;
     },
     enabled: isAuthenticated && !!user,
@@ -36,7 +36,7 @@ export function useCCPAConsent() {
   // Record consent
   const consentMutation = useMutation({
     mutationFn: async (accepted: boolean) => {
-      const result = await apiRequest<ConsentResponse>('/api/consent/location', {
+      const result = await apiRequest<ConsentResponse>('/api/v1/consent/location', {
         method: 'POST',
         body: JSON.stringify({ accepted }),
       });

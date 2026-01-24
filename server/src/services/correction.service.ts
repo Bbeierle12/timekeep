@@ -23,17 +23,23 @@ export type CorrectionApplyInput = {
 export const correctionService = {
   async list(params: { status?: string; limit?: number; offset?: number }) {
     const filters: string[] = [];
-    const values: Array<string | number> = [];
+    const filterValues: Array<string | number> = [];
 
     if (params.status) {
-      values.push(params.status);
-      filters.push(`c.status = $${values.length}`);
+      filterValues.push(params.status);
+      filters.push(`c.status = $${filterValues.length}`);
     }
 
     const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    const countResult = await pool.query(
+      `SELECT COUNT(*) FROM time_entry_corrections c ${where}`,
+      filterValues
+    );
+    const total = Number(countResult.rows[0]?.count ?? 0);
+
     const limit = params.limit ?? 200;
     const offset = params.offset ?? 0;
-    values.push(limit, offset);
+    const values = [...filterValues, limit, offset];
 
     const result = await pool.query(
       `SELECT c.id, c.time_entry_id, c.requested_by, c.request_reason, c.new_recorded_at,
@@ -48,7 +54,7 @@ export const correctionService = {
       values
     );
 
-    return result.rows;
+    return { items: result.rows, total };
   },
 
   async requestCorrection(input: CorrectionRequestInput) {

@@ -82,16 +82,17 @@ export async function fetchEmployeeEntries(
 }
 
 export async function fetchCorrections(
-  params: { status?: string; limit?: number }
-): Promise<Correction[]> {
+  params: { status?: string; limit?: number; offset?: number }
+): Promise<PagedResponse<Correction>> {
   const searchParams = new URLSearchParams();
   if (params.status) searchParams.set('status', params.status);
   if (params.limit) searchParams.set('limit', String(params.limit));
+  if (params.offset !== undefined) searchParams.set('offset', String(params.offset));
 
   const query = searchParams.toString();
   const url = `/api/v1/admin/entries/corrections${query ? `?${query}` : ''}`;
 
-  return apiRequest<Correction[]>(url);
+  return apiRequest<PagedResponse<Correction>>(url);
 }
 
 export type RequestCorrectionPayload = {

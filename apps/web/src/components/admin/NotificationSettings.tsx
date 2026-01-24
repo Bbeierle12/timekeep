@@ -184,6 +184,11 @@ export default function NotificationSettings({
                     onChange={(e) =>
                       onNotificationChange(config.event, { realtime: e.target.checked })
                     }
+                    label={
+                      <span className="sr-only">
+                        Enable real-time alerts for {eventInfo.label}
+                      </span>
+                    }
                   />
                 </div>
                 <div className="flex justify-center">
@@ -191,6 +196,11 @@ export default function NotificationSettings({
                     checked={config.digest}
                     onChange={(e) =>
                       onNotificationChange(config.event, { digest: e.target.checked })
+                    }
+                    label={
+                      <span className="sr-only">
+                        Enable daily digest for {eventInfo.label}
+                      </span>
                     }
                   />
                 </div>

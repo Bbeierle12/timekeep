@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { testRequest, mockEmployee, mockQueryResult, mockPoolQuery } from '../helpers';
+import { config } from '../../config';
 import * as hashUtils from '../../utils/hash';
 
 // Mock the hash verification
@@ -100,7 +101,7 @@ describe('Auth Routes', () => {
       expect(response.body.code).toBe('INVALID_CREDENTIALS');
     });
 
-    it('returns token for valid credentials', async () => {
+    it('sets auth cookie for valid credentials', async () => {
       mockPoolQuery
         .mockResolvedValueOnce(mockQueryResult([mockEmployee])) // Get employee
         .mockResolvedValueOnce(mockQueryResult([])) // Update login time
@@ -116,8 +117,12 @@ describe('Auth Routes', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.status).toBe('success');
-      expect(response.body.data).toHaveProperty('token');
+      expect(response.body.data).not.toHaveProperty('token');
+      expect(response.body.data).toHaveProperty('expiresAt');
       expect(response.body.data.user.type).toBe('EMPLOYEE');
+      expect(response.headers['set-cookie']).toEqual(
+        expect.arrayContaining([expect.stringContaining(`${config.authCookieName}=`)])
+      );
     });
   });
 

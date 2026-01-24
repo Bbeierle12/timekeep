@@ -118,8 +118,24 @@ router.get('/corrections', async (req, res) => {
     return;
   }
 
-  const corrections = await correctionService.list(parsed.data);
-  res.json({ status: 'success', data: corrections });
+  const limit = parsed.data.limit ?? 200;
+  const offset = parsed.data.offset ?? 0;
+  const { items, total } = await correctionService.list({
+    ...parsed.data,
+    limit,
+    offset
+  });
+
+  res.json({
+    status: 'success',
+    data: {
+      items,
+      total,
+      limit,
+      offset,
+      nextOffset: offset + limit < total ? offset + limit : null
+    }
+  });
 });
 
 router.post('/:id/corrections', async (req, res) => {

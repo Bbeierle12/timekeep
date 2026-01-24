@@ -220,10 +220,12 @@ export default function ExportSettings({
                   <Checkbox
                     checked={column.enabled}
                     onChange={() => toggleColumn(activeTab, column.key)}
+                    label={
+                      <span className={column.enabled ? 'text-slate-100' : 'text-slate-500'}>
+                        {column.label}
+                      </span>
+                    }
                   />
-                  <span className={column.enabled ? 'text-slate-100' : 'text-slate-500'}>
-                    {column.label}
-                  </span>
                 </div>
                 <div className="flex gap-1">
                   <button

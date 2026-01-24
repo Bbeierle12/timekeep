@@ -8,6 +8,7 @@ import certificationRoutes from '../certification';
 import pushTokenRoutes from '../pushTokens';
 import adminRoutes from '../admin';
 import settingsRoutes from './settings';
+import consentRoutes from './consent';
 
 const router = Router();
 
@@ -19,6 +20,7 @@ router.use('/attestations', attestationRoutes);
 router.use('/certifications', certificationRoutes);
 router.use('/push-tokens', pushTokenRoutes);
 router.use('/settings', settingsRoutes);
+router.use('/consent', consentRoutes);
 router.use('/admin', adminRoutes);
 
 export default router;

@@ -7,6 +7,7 @@ import { useGeolocation } from '../../hooks/useGeolocation';
 import PunchButton from '../../components/employee/PunchButton';
 import TimeLog from '../../components/employee/TimeLog';
 import EmployeeMenu from '../../components/employee/EmployeeMenu';
+import Button from '../../components/ui/Button';
 import LunchWarningModal from '../../components/employee/LunchWarningModal';
 import WaiverModal from '../../components/employee/WaiverModal';
 import AttestationModal from '../../components/employee/AttestationModal';
@@ -18,6 +19,8 @@ export default function EmployeeDashboard() {
     entries,
     settings,
     isLoading,
+    isError,
+    error,
     clockedIn,
     clockedOut,
     onLunch,
@@ -140,6 +143,20 @@ export default function EmployeeDashboard() {
       </header>
 
       <main className="max-w-5xl mx-auto px-4 py-6 space-y-6">
+        {isError && (
+          <div className="bg-red-900/30 border border-red-500/50 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <p className="text-red-200 font-medium">Unable to load today&apos;s data</p>
+              <p className="text-red-300 text-sm">
+                {error instanceof Error ? error.message : 'Please try again.'}
+              </p>
+            </div>
+            <Button variant="secondary" onClick={() => refetch()}>
+              Retry
+            </Button>
+          </div>
+        )}
+
         {/* Date and Time */}
         <div className="text-center">
           <p className="text-2xl font-semibold text-slate-100">

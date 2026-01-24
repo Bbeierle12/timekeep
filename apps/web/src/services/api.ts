@@ -1,5 +1,9 @@
 export const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:4000';
 
+const DEFAULT_TIMEOUT_MS = 15000;
+const DEFAULT_RETRY_DELAY_MS = 300;
+const DEFAULT_RETRIES = 1;
+
 export type ApiResponse<T> = {
   status: 'success' | 'error';
   data?: T;
@@ -25,6 +29,12 @@ export class ApiError extends Error {
     this.name = 'ApiError';
   }
 }
+
+export type ApiRequestOptions = RequestInit & {
+  timeoutMs?: number;
+  retries?: number;
+  retryDelayMs?: number;
+};
 
 let csrfToken: string | null = null;
 let csrfPromise: Promise<string> | null = null;
@@ -60,11 +70,58 @@ function needsCsrfToken(method: string) {
   return !['GET', 'HEAD', 'OPTIONS'].includes(method.toUpperCase());
 }
 
+function isIdempotentMethod(method: string) {
+  return ['GET', 'HEAD', 'OPTIONS'].includes(method.toUpperCase());
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function createAbortSignal(timeoutMs: number, upstream?: AbortSignal | null) {
+  const controller = new AbortController();
+  let didTimeout = false;
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  let onAbort: (() => void) | null = null;
+
+  if (upstream) {
+    if (upstream.aborted) {
+      controller.abort();
+    } else {
+      onAbort = () => controller.abort();
+      upstream.addEventListener('abort', onAbort, { once: true });
+    }
+  }
+
+  if (timeoutMs > 0) {
+    timeoutId = setTimeout(() => {
+      didTimeout = true;
+      controller.abort();
+    }, timeoutMs);
+  }
+
+  const cleanup = () => {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+    if (upstream && onAbort) {
+      upstream.removeEventListener('abort', onAbort);
+    }
+  };
+
+  return { signal: controller.signal, cleanup, didTimeout: () => didTimeout };
+}
+
 export async function apiRequest<T>(
   path: string,
-  options?: RequestInit
+  options?: ApiRequestOptions
 ): Promise<T> {
-  const fetchOptions = options ?? {};
+  const {
+    timeoutMs,
+    retries,
+    retryDelayMs,
+    ...fetchOptions
+  } = options ?? {};
   const method = (fetchOptions.method ?? 'GET').toString().toUpperCase();
 
   const headers = new Headers(fetchOptions.headers);
@@ -77,21 +134,49 @@ export async function apiRequest<T>(
     headers.set('X-CSRF-Token', token);
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...fetchOptions,
-    headers,
-    credentials: 'include'
-  });
+  const maxRetries = retries ?? (isIdempotentMethod(method) ? DEFAULT_RETRIES : 0);
+  const timeout = timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const retryDelay = retryDelayMs ?? DEFAULT_RETRY_DELAY_MS;
 
-  const data = await response.json() as ApiResponse<T>;
+  let attempt = 0;
+  while (true) {
+    const { signal, cleanup, didTimeout } = createAbortSignal(timeout, fetchOptions.signal);
+    try {
+      const response = await fetch(`${API_BASE_URL}${path}`, {
+        ...fetchOptions,
+        headers,
+        credentials: 'include',
+        signal
+      });
 
-  if (!response.ok || data.status === 'error') {
-    throw new ApiError(
-      data.message ?? `Request failed: ${response.status}`,
-      response.status,
-      data.code
-    );
+      const data = await response.json() as ApiResponse<T>;
+
+      if (!response.ok || data.status === 'error') {
+        throw new ApiError(
+          data.message ?? `Request failed: ${response.status}`,
+          response.status,
+          data.code
+        );
+      }
+
+      return data.data as T;
+    } catch (error) {
+      const isAbortError = error instanceof Error && error.name === 'AbortError';
+      if (isAbortError) {
+        if (didTimeout()) {
+          throw new ApiError('Request timed out', 408);
+        }
+        throw error;
+      }
+
+      if (error instanceof ApiError || attempt >= maxRetries || !isIdempotentMethod(method)) {
+        throw error;
+      }
+
+      attempt += 1;
+      await delay(retryDelay * attempt);
+    } finally {
+      cleanup();
+    }
   }
-
-  return data.data as T;
 }

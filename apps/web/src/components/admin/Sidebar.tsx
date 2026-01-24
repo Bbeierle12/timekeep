@@ -85,8 +85,11 @@ const navItems: NavItem[] = [
 ];
 
 export default function Sidebar() {
-  const { admin, logout } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
+
+  const adminName = user?.name ?? 'Admin';
+  const adminRole = user?.role ?? 'Admin';
 
   const handleLogout = () => {
     logout();
@@ -129,14 +132,14 @@ export default function Sidebar() {
       <div className="p-4 border-t border-slate-700">
         <div className="flex items-center gap-3 mb-3">
           <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm font-medium">
-            {admin?.name?.charAt(0).toUpperCase() || 'A'}
+            {adminName.charAt(0).toUpperCase()}
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-white truncate">
-              {admin?.name || 'Admin'}
+              {adminName}
             </p>
             <p className="text-xs text-slate-400 truncate">
-              {admin?.email || ''}
+              {adminRole}
             </p>
           </div>
         </div>

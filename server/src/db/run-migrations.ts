@@ -23,7 +23,8 @@ async function runMigrations() {
   const migrations = [
     '003_phase3_updates.sql',
     '004_phase4_updates.sql',
-    '005_phase5_security_schema.sql'
+    '005_phase5_security_schema.sql',
+    '006_phase2_consents.sql'
   ];
 
   for (const migration of migrations) {
