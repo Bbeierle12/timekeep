@@ -227,6 +227,7 @@ CREATE TABLE time_entries (
 
 CREATE INDEX idx_time_entries_employee_date ON time_entries(employee_id, work_date);
 CREATE INDEX idx_time_entries_work_date ON time_entries(work_date);
+CREATE INDEX idx_time_entries_recorded ON time_entries(recorded_at DESC);
 
 -- -------------------------------------------------------------
 -- TIME ENTRY CORRECTIONS (Dual Approval)
@@ -299,6 +300,8 @@ CREATE TABLE daily_summaries (
     UNIQUE(employee_id, work_date)
 );
 
+CREATE INDEX idx_daily_summaries_date ON daily_summaries(work_date);
+
 -- -------------------------------------------------------------
 -- WAIVERS
 -- -------------------------------------------------------------
@@ -328,6 +331,8 @@ CREATE TABLE waivers (
 
     created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE INDEX idx_waivers_employee_date ON waivers(employee_id, work_date);
 
 -- -------------------------------------------------------------
 -- ATTESTATIONS
@@ -360,6 +365,9 @@ CREATE TABLE attestations (
     created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE INDEX idx_attestations_employee_date ON attestations(employee_id, work_date);
+CREATE UNIQUE INDEX idx_attestations_unique ON attestations(employee_id, work_date, attestation_type);
+
 -- -------------------------------------------------------------
 -- REMINDERS LOG
 -- -------------------------------------------------------------
@@ -378,6 +386,8 @@ CREATE TABLE reminders (
 
     created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE INDEX idx_reminders_employee_date ON reminders(employee_id, work_date);
 
 -- -------------------------------------------------------------
 -- AUDIT LOG

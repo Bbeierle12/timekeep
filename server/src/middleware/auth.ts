@@ -3,6 +3,7 @@ import { verifyToken } from '../utils/jwt';
 import { hashToken } from '../utils/token';
 import { pool } from '../db/connection';
 import { config } from '../config';
+import { ApiError } from '../errors';
 
 export async function requireAuth(req: Request, res: Response, next: NextFunction) {
   const header = req.headers.authorization ?? '';
@@ -11,7 +12,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   const authToken = token ?? cookieToken;
 
   if (!authToken) {
-    res.status(401).json({ status: 'error', message: 'Missing auth token' });
+    next(ApiError.unauthorized('MISSING_TOKEN', 'Missing auth token'));
     return;
   }
 
@@ -24,13 +25,13 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     );
 
     if (sessionResult.rowCount === 0) {
-      res.status(401).json({ status: 'error', message: 'Session not found' });
+      next(ApiError.unauthorized('SESSION_NOT_FOUND', 'Session not found'));
       return;
     }
 
     const expiresAt = sessionResult.rows[0].expires_at as Date;
     if (expiresAt && expiresAt.getTime() < Date.now()) {
-      res.status(401).json({ status: 'error', message: 'Session expired' });
+      next(ApiError.unauthorized('SESSION_EXPIRED', 'Session expired'));
       return;
     }
 
@@ -41,7 +42,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     };
     req.token = authToken;
     next();
-  } catch (error) {
-    res.status(401).json({ status: 'error', message: 'Invalid auth token' });
+  } catch {
+    next(ApiError.unauthorized('INVALID_TOKEN', 'Invalid auth token'));
   }
 }

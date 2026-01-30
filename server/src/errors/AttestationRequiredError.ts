@@ -1,9 +1,15 @@
-export class AttestationRequiredError extends Error {
-  public readonly code = 'ATTESTATION_REQUIRED';
+import { ApiError } from './ApiError';
+
+export class AttestationRequiredError extends ApiError {
   public readonly violationType: string;
 
   constructor(violationType: string) {
-    super('You must complete an attestation before clocking out');
+    super(
+      400,
+      'ATTESTATION_REQUIRED',
+      'You must complete an attestation before clocking out',
+      { violationType }
+    );
     this.name = 'AttestationRequiredError';
     this.violationType = violationType;
   }

@@ -1,6 +1,6 @@
 import { pool } from '../db/connection';
 import { hashToken, generateSecureToken } from '../utils/token';
-import crypto from 'crypto';
+import { generateSecret, generateURI, verifySync } from 'otplib';
 
 const RECOVERY_CODE_COUNT = 10;
 
@@ -12,23 +12,10 @@ export type MfaSetupResult = {
 
 /**
  * Generate a TOTP secret (base32 encoded)
- * In production, use a library like speakeasy or otplib
+ * Uses otplib for proper RFC 6238 compliant secret generation
  */
 function generateTotpSecret(): string {
-  const buffer = crypto.randomBytes(20);
-  // Base32 encoding - using hex as fallback since Node doesn't natively support base32
-  // In production, use a proper base32 library or speakeasy which handles this
-  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-  let result = '';
-  const bytes = buffer;
-  for (let i = 0; i < bytes.length; i += 5) {
-    const chunk = bytes.slice(i, i + 5);
-    for (let j = 0; j < 8 && i + Math.floor(j * 5 / 8) < bytes.length; j++) {
-      const index = (chunk[Math.floor(j * 5 / 8)] >> (3 - (j * 5 % 8))) & 0x1f;
-      result += alphabet[index] || alphabet[0];
-    }
-  }
-  return result.slice(0, 32);
+  return generateSecret();
 }
 
 /**
@@ -66,9 +53,13 @@ export const mfaService = {
     const email = adminResult.rows[0].email;
     const secret = generateTotpSecret();
 
-    // Generate QR code URL (otpauth format)
+    // Generate QR code URL using otplib's generateURI for proper RFC 6238 formatting
     const issuer = 'Timekeep';
-    const qrCodeUrl = `otpauth://totp/${encodeURIComponent(issuer)}:${encodeURIComponent(email)}?secret=${secret}&issuer=${encodeURIComponent(issuer)}`;
+    const qrCodeUrl = generateURI({
+      label: email,
+      issuer,
+      secret
+    });
 
     // Store secret temporarily (will be confirmed on verification)
     await pool.query(
@@ -131,20 +122,29 @@ export const mfaService = {
   },
 
   /**
-   * Verify a TOTP code
-   * NOTE: This is a placeholder. In production, use speakeasy or otplib
+   * Verify a TOTP code using RFC 6238 algorithm
+   * Uses otplib with ±1 time step tolerance (30 seconds each direction)
    */
   verifyTotpCode(secret: string, code: string): boolean {
-    // This is a simplified check - in production use a proper TOTP library
-    // that handles time drift and validates against the actual algorithm
-    if (code.length !== 6 || !/^\d+$/.test(code)) {
+    // Basic format validation
+    if (!code || code.length !== 6 || !/^\d{6}$/.test(code)) {
       return false;
     }
 
-    // For now, accept any 6-digit code during development
-    // TODO: Implement proper TOTP verification with speakeasy or otplib
-    console.warn('TOTP verification is a stub - install speakeasy/otplib for production');
-    return true;
+    if (!secret) {
+      return false;
+    }
+
+    try {
+      // verifySync returns { valid: boolean, delta: number, ... }
+      // Uses constant-time comparison internally
+      // Default window of 1 allows ±1 time step (30 seconds each direction)
+      const result = verifySync({ token: code, secret });
+      return result.valid;
+    } catch {
+      // Invalid secret format or other error
+      return false;
+    }
   },
 
   /**

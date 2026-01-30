@@ -1,4 +1,4 @@
-import { pool } from '../db/connection';
+import { pool, type Queryable } from '../db/connection';
 import { minutesBetween } from '../utils/time';
 import { getCompanySettings } from './settings.service';
 import { formatInTimeZone } from 'date-fns-tz';
@@ -36,13 +36,40 @@ export type DailySummary = {
 
 const FIVE_HOURS_MINUTES = 300;
 const SIX_HOURS_MINUTES = 360;
+const EIGHT_HOURS_MINUTES = 480;  // Regular time threshold (California daily OT)
 const TEN_HOURS_MINUTES = 600;
-const TWELVE_HOURS_MINUTES = 720;
+const TWELVE_HOURS_MINUTES = 720; // Doubletime threshold (California daily OT)
 const FIFTEEN_HOURS_MINUTES = 900;
 const REST_BREAK_FIRST_THRESHOLD = 210;
 const REST_BREAK_SECOND_THRESHOLD = 360;
 const REST_BREAK_THIRD_THRESHOLD = 600;
 const SPLIT_SHIFT_GAP_MINUTES = 60; // Gap > 1 hour indicates split shift
+
+/**
+ * Calculate California daily overtime and doubletime
+ * - Regular time: first 8 hours
+ * - Overtime (1.5x): hours 8-12
+ * - Doubletime (2x): beyond 12 hours
+ */
+function calculateOvertimeMinutes(workedMinutes: number | null): { overtime: number; doubletime: number } {
+  if (workedMinutes === null || workedMinutes <= EIGHT_HOURS_MINUTES) {
+    return { overtime: 0, doubletime: 0 };
+  }
+
+  if (workedMinutes <= TWELVE_HOURS_MINUTES) {
+    // Between 8-12 hours: all extra time is overtime
+    return {
+      overtime: workedMinutes - EIGHT_HOURS_MINUTES,
+      doubletime: 0
+    };
+  }
+
+  // Beyond 12 hours: 4 hours of overtime + rest is doubletime
+  return {
+    overtime: TWELVE_HOURS_MINUTES - EIGHT_HOURS_MINUTES, // Always 4 hours (240 minutes)
+    doubletime: workedMinutes - TWELVE_HOURS_MINUTES
+  };
+}
 
 function firstMatch(entries: Array<{ action_type: string; recorded_at: Date }>, type: string) {
   return entries.find((entry) => entry.action_type === type)?.recorded_at ?? null;
@@ -66,8 +93,8 @@ function calculateBreaksRequired(totalShiftMinutes: number | null) {
 }
 
 export const dailySummaryService = {
-  async getSummary(employeeId: string, workDate: string) {
-    const result = await pool.query(
+  async getSummary(employeeId: string, workDate: string, db: Queryable = pool) {
+    const result = await db.query(
       `SELECT * FROM daily_summaries WHERE employee_id = $1 AND work_date = $2`,
       [employeeId, workDate]
     );
@@ -75,17 +102,17 @@ export const dailySummaryService = {
     return result.rowCount ? (result.rows[0] as DailySummary) : null;
   },
 
-  async recalculate(employeeId: string, workDate: string) {
+  async recalculate(employeeId: string, workDate: string, db: Queryable = pool) {
     const settings = await getCompanySettings();
 
     // Check if employee is exempt from compliance tracking
-    const employeeResult = await pool.query(
+    const employeeResult = await db.query(
       'SELECT is_exempt FROM employees WHERE id = $1',
       [employeeId]
     );
     const isExempt = employeeResult.rows[0]?.is_exempt ?? false;
 
-    const entriesResult = await pool.query(
+    const entriesResult = await db.query(
       `SELECT action_type, recorded_at
        FROM time_entries
        WHERE employee_id = $1 AND work_date = $2
@@ -126,7 +153,7 @@ export const dailySummaryService = {
         )?.recorded_at ?? null;
     }
 
-    const waiverResult = await pool.query(
+    const waiverResult = await db.query(
       `SELECT id, waiver_type FROM waivers WHERE employee_id = $1 AND work_date = $2 AND is_revoked = FALSE AND is_invalid = FALSE`,
       [employeeId, workDate]
     );
@@ -157,6 +184,12 @@ export const dailySummaryService = {
       (lunchDurationMinutes ?? 0) + (secondLunchDurationMinutes ?? 0) + (thirdLunchDurationMinutes ?? 0);
     const workedMinutes =
       totalShiftMinutes !== null ? Math.max(0, totalShiftMinutes - totalLunchMinutes) : null;
+
+    // Calculate California daily overtime and doubletime
+    // Exempt employees don't get overtime
+    const { overtime: overtimeMinutes, doubletime: doubletimeMinutes } = isExempt
+      ? { overtime: 0, doubletime: 0 }
+      : calculateOvertimeMinutes(workedMinutes);
 
     // Split shift detection: check for gaps > 1 hour between meal end and next work segment
     // A split shift occurs when lunch period exceeds normal duration significantly
@@ -291,7 +324,7 @@ export const dailySummaryService = {
 
     const hasViolation = Boolean(violationType) || Boolean(secondLunchViolationType) || Boolean(thirdLunchViolationType);
 
-    await pool.query(
+    await db.query(
       `INSERT INTO daily_summaries
        (employee_id, work_date, clock_in_at, clock_out_at, lunch_start_at, lunch_end_at,
         lunch_duration_minutes, lunch_compliant,
@@ -299,11 +332,11 @@ export const dailySummaryService = {
         second_lunch_compliant, second_lunch_violation_type,
         third_lunch_start_at, third_lunch_end_at, third_lunch_duration_minutes,
         third_lunch_compliant, third_lunch_violation_type,
-        total_shift_minutes, worked_minutes,
+        total_shift_minutes, worked_minutes, overtime_minutes, doubletime_minutes,
         breaks_required, breaks_taken,
         has_violation, violation_type, shift_crosses_midnight,
         has_split_shift, split_shift_gap_minutes, split_shift_premium_owed, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31)
        ON CONFLICT (employee_id, work_date)
        DO UPDATE SET
          clock_in_at = EXCLUDED.clock_in_at,
@@ -324,6 +357,8 @@ export const dailySummaryService = {
          third_lunch_violation_type = EXCLUDED.third_lunch_violation_type,
          total_shift_minutes = EXCLUDED.total_shift_minutes,
          worked_minutes = EXCLUDED.worked_minutes,
+         overtime_minutes = EXCLUDED.overtime_minutes,
+         doubletime_minutes = EXCLUDED.doubletime_minutes,
          breaks_required = EXCLUDED.breaks_required,
          breaks_taken = EXCLUDED.breaks_taken,
          has_violation = EXCLUDED.has_violation,
@@ -354,6 +389,8 @@ export const dailySummaryService = {
         thirdLunchViolationType,
         totalShiftMinutes,
         workedMinutes,
+        overtimeMinutes,
+        doubletimeMinutes,
         breaksRequired,
         breaksTaken,
         hasViolation,
@@ -366,7 +403,7 @@ export const dailySummaryService = {
       ]
     );
 
-    return this.getSummary(employeeId, workDate);
+    return this.getSummary(employeeId, workDate, db);
   },
 
   async flagPremiumPay(

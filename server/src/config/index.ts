@@ -31,6 +31,8 @@ const rateLimitRedisUrl = process.env.RATE_LIMIT_REDIS_URL ?? process.env.REDIS_
 export const config = {
   port: Number(process.env.PORT ?? 4000),
   databaseUrl: process.env.DATABASE_URL ?? '',
+  // Statement timeout in milliseconds (default 30 seconds)
+  dbStatementTimeoutMs: Number(process.env.DB_STATEMENT_TIMEOUT_MS ?? 30000),
   jwtSecret: getJwtSecret(),
   csrfSecret: getCsrfSecret(),
   nodeEnv,
