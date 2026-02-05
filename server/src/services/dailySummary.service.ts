@@ -2,6 +2,7 @@ import { pool, type Queryable } from '../db/connection';
 import { minutesBetween } from '../utils/time';
 import { getCompanySettings } from './settings.service';
 import { formatInTimeZone } from 'date-fns-tz';
+import { weeklyOvertimeService } from './weeklyOvertime.service';
 
 export type DailySummary = {
   employee_id: string;
@@ -19,6 +20,8 @@ export type DailySummary = {
   second_lunch_violation_type: string | null;
   total_shift_minutes: number | null;
   worked_minutes: number | null;
+  overtime_minutes: number | null;
+  doubletime_minutes: number | null;
   has_violation: boolean;
   violation_type: string | null;
   premium_pay_owed: boolean | null;
@@ -27,6 +30,8 @@ export type DailySummary = {
   has_split_shift: boolean;
   split_shift_gap_minutes: number | null;
   split_shift_premium_owed: boolean;
+  is_seventh_consecutive_day: boolean;
+  weekly_overtime_minutes: number | null;
   third_lunch_start_at: Date | null;
   third_lunch_end_at: Date | null;
   third_lunch_duration_minutes: number | null;
@@ -50,9 +55,32 @@ const SPLIT_SHIFT_GAP_MINUTES = 60; // Gap > 1 hour indicates split shift
  * - Regular time: first 8 hours
  * - Overtime (1.5x): hours 8-12
  * - Doubletime (2x): beyond 12 hours
+ *
+ * For 7th consecutive day:
+ * - All hours up to 8: 1.5x (overtime)
+ * - Beyond 8 hours: 2x (doubletime)
  */
-function calculateOvertimeMinutes(workedMinutes: number | null): { overtime: number; doubletime: number } {
-  if (workedMinutes === null || workedMinutes <= EIGHT_HOURS_MINUTES) {
+function calculateOvertimeMinutes(
+  workedMinutes: number | null,
+  isSeventhConsecutiveDay: boolean = false
+): { overtime: number; doubletime: number } {
+  if (workedMinutes === null || workedMinutes <= 0) {
+    return { overtime: 0, doubletime: 0 };
+  }
+
+  // 7th consecutive day special rules (California Labor Code Section 510)
+  if (isSeventhConsecutiveDay) {
+    // All hours are premium pay on 7th day:
+    // - First 8 hours at 1.5x (overtime)
+    // - Beyond 8 hours at 2x (doubletime)
+    return {
+      overtime: Math.min(workedMinutes, EIGHT_HOURS_MINUTES),
+      doubletime: Math.max(0, workedMinutes - EIGHT_HOURS_MINUTES)
+    };
+  }
+
+  // Normal daily overtime rules
+  if (workedMinutes <= EIGHT_HOURS_MINUTES) {
     return { overtime: 0, doubletime: 0 };
   }
 
@@ -185,11 +213,44 @@ export const dailySummaryService = {
     const workedMinutes =
       totalShiftMinutes !== null ? Math.max(0, totalShiftMinutes - totalLunchMinutes) : null;
 
+    // Check if this is the 7th consecutive day in the work week
+    let isSeventhConsecutiveDay = false;
+    if (!isExempt) {
+      const weekStartDay = await weeklyOvertimeService.getWeekStartDay(db);
+      const settingsResult = await db.query(
+        'SELECT seventh_day_rule_enabled FROM company_settings WHERE id = 1'
+      );
+      const seventhDayRuleEnabled = settingsResult.rows[0]?.seventh_day_rule_enabled ?? true;
+
+      if (seventhDayRuleEnabled) {
+        const { start: weekStart, end: weekEnd } = await import('./weeklyOvertime.service').then(
+          (m) => m.getWorkWeekBounds(workDate, weekStartDay)
+        );
+        const dailySummaries = await weeklyOvertimeService.getDailySummariesForWeek(
+          employeeId,
+          weekStart,
+          weekEnd,
+          db
+        );
+        // Include today if it has worked minutes
+        const allDays = [...dailySummaries];
+        if (workedMinutes && workedMinutes > 0 && !allDays.some((d) => d.work_date === workDate)) {
+          allDays.push({ work_date: workDate, worked_minutes: workedMinutes, overtime_minutes: 0, doubletime_minutes: 0 });
+        }
+        isSeventhConsecutiveDay = weeklyOvertimeService.isSeventhConsecutiveDay(
+          workDate,
+          allDays,
+          seventhDayRuleEnabled
+        );
+      }
+    }
+
     // Calculate California daily overtime and doubletime
     // Exempt employees don't get overtime
+    // 7th consecutive day gets special overtime rules
     const { overtime: overtimeMinutes, doubletime: doubletimeMinutes } = isExempt
       ? { overtime: 0, doubletime: 0 }
-      : calculateOvertimeMinutes(workedMinutes);
+      : calculateOvertimeMinutes(workedMinutes, isSeventhConsecutiveDay);
 
     // Split shift detection: check for gaps > 1 hour between meal end and next work segment
     // A split shift occurs when lunch period exceeds normal duration significantly
@@ -322,6 +383,17 @@ export const dailySummaryService = {
       }
     }
 
+    // Rest break violation detection
+    const missedBreaks = breaksRequired - breaksTaken;
+    const hasRestBreakViolation = missedBreaks > 0 && !isExempt;
+
+    // Append rest break violation if applicable
+    if (hasRestBreakViolation) {
+      violationType = violationType
+        ? `${violationType},MISSED_REST_BREAK`
+        : 'MISSED_REST_BREAK';
+    }
+
     const hasViolation = Boolean(violationType) || Boolean(secondLunchViolationType) || Boolean(thirdLunchViolationType);
 
     await db.query(
@@ -335,8 +407,9 @@ export const dailySummaryService = {
         total_shift_minutes, worked_minutes, overtime_minutes, doubletime_minutes,
         breaks_required, breaks_taken,
         has_violation, violation_type, shift_crosses_midnight,
-        has_split_shift, split_shift_gap_minutes, split_shift_premium_owed, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31)
+        has_split_shift, split_shift_gap_minutes, split_shift_premium_owed,
+        is_seventh_consecutive_day, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32)
        ON CONFLICT (employee_id, work_date)
        DO UPDATE SET
          clock_in_at = EXCLUDED.clock_in_at,
@@ -367,6 +440,7 @@ export const dailySummaryService = {
          has_split_shift = EXCLUDED.has_split_shift,
          split_shift_gap_minutes = EXCLUDED.split_shift_gap_minutes,
          split_shift_premium_owed = EXCLUDED.split_shift_premium_owed,
+         is_seventh_consecutive_day = EXCLUDED.is_seventh_consecutive_day,
          updated_at = EXCLUDED.updated_at`,
       [
         employeeId,
@@ -399,9 +473,22 @@ export const dailySummaryService = {
         hasSplitShift,
         splitShiftGapMinutes,
         splitShiftPremiumOwed,
+        isSeventhConsecutiveDay,
         new Date()
       ]
     );
+
+    // Auto-flag premium pay for missed rest breaks (California: 1 hour premium per missed break)
+    // Only flag when shift is complete (has clock out) and there are missed breaks
+    if (clockOut && hasRestBreakViolation && missedBreaks > 0) {
+      await this.flagPremiumPay(employeeId, workDate, true, missedBreaks);
+    }
+
+    // Recalculate weekly overtime when shift is complete
+    // This updates the weekly_summaries table and handles 7th day rule
+    if (clockOut) {
+      await weeklyOvertimeService.recalculateWeeklySummary(employeeId, workDate, db);
+    }
 
     return this.getSummary(employeeId, workDate, db);
   },

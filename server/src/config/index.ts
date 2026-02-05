@@ -28,9 +28,15 @@ function getCsrfSecret(): string {
 const nodeEnv = process.env.NODE_ENV ?? 'development';
 const rateLimitRedisUrl = process.env.RATE_LIMIT_REDIS_URL ?? process.env.REDIS_URL ?? undefined;
 
+function getMigrationDatabaseUrl(): string {
+  // For migrations, prefer MIGRATION_DATABASE_URL, then fall back to DATABASE_URL
+  return process.env.MIGRATION_DATABASE_URL ?? process.env.DATABASE_URL ?? '';
+}
+
 export const config = {
   port: Number(process.env.PORT ?? 4000),
   databaseUrl: process.env.DATABASE_URL ?? '',
+  migrationDatabaseUrl: getMigrationDatabaseUrl(),
   // Statement timeout in milliseconds (default 30 seconds)
   dbStatementTimeoutMs: Number(process.env.DB_STATEMENT_TIMEOUT_MS ?? 30000),
   jwtSecret: getJwtSecret(),
