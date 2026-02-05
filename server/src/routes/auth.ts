@@ -40,7 +40,7 @@ const validateTokenSchema = z.object({
 const authCookieOptions = {
   httpOnly: true,
   secure: config.nodeEnv === 'production',
-  sameSite: 'lax' as const,
+  sameSite: 'strict' as const,  // Strict for better CSRF protection
   path: '/'
 };
 

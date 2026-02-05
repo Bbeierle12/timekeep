@@ -27,7 +27,9 @@ async function runMigrations() {
     '005_phase5_security_schema.sql',
     '006_phase2_consents.sql',
     '007_add_reminders_index.sql',
-    '008_weekly_overtime.sql'
+    '008_weekly_overtime.sql',
+    '009_add_foreign_key_constraints.sql',
+    '010_add_performance_indexes.sql'
   ];
 
   for (const migration of migrations) {

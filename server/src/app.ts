@@ -6,9 +6,13 @@ import routes from './routes';
 import { config } from './config';
 import { globalRateLimiter, loginRateLimiter } from './middleware/rateLimiter';
 import { csrfProtection, getCsrfToken, invalidCsrfTokenError } from './middleware/csrf';
+import { httpsRedirect } from './middleware/httpsRedirect';
 import { ApiError } from './errors';
 
 const app = express();
+
+// HTTPS redirect (must be first in production)
+app.use(httpsRedirect);
 
 // Security headers via helmet
 app.use(helmet({
