@@ -9,7 +9,7 @@
   "scripts": {
     "dev:web": "npm --workspace apps/web run dev",
     "build:web": "npm --workspace apps/web run build",
-    "dev:server": "npm --workspace server run dev",
+    "dev:server": "docker-compose up -d db && npm --workspace server run dev",
     "dev:mobile": "npm --workspace apps/mobile run start",
     "lint": "npm --workspaces run lint",
     "test": "npm --workspaces run test:run --if-present",

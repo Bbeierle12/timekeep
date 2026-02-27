@@ -2,19 +2,32 @@ import express, { type Request, type Response, type NextFunction } from 'express
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import routes from './routes';
 import { config } from './config';
 import { globalRateLimiter, loginRateLimiter } from './middleware/rateLimiter';
 import { csrfProtection, getCsrfToken, invalidCsrfTokenError } from './middleware/csrf';
 import { ApiError } from './errors';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const app = express();
 
 // Security headers via helmet
 app.use(helmet({
-  // Content Security Policy - relaxed for API server
-  // The frontend handles its own CSP
-  contentSecurityPolicy: false,
+  // Content Security Policy - allow serving the frontend SPA
+  contentSecurityPolicy: config.nodeEnv === 'production' ? {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", 'data:', 'blob:'],
+      connectSrc: ["'self'"],
+      fontSrc: ["'self'"],
+    }
+  } : false,
   // X-Frame-Options: DENY
   frameguard: { action: 'deny' },
   // Strict-Transport-Security - only in production with HTTPS
@@ -75,6 +88,21 @@ app.get('/health', (_req, res) => {
 });
 
 app.use('/api', routes);
+
+// --- Serve frontend static files in production ---
+const clientDistPath = path.join(__dirname, '..', 'client');
+app.use(express.static(clientDistPath));
+
+// SPA fallback: serve index.html for any non-API route
+app.get('*', (req, res, next) => {
+  // Don't serve index.html for API routes or health check
+  if (req.path.startsWith('/api') || req.path === '/health') {
+    return next();
+  }
+  res.sendFile(path.join(clientDistPath, 'index.html'), (err) => {
+    if (err) next(); // If file doesn't exist, fall through
+  });
+});
 
 // Global error handler
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {

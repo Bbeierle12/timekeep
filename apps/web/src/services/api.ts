@@ -1,4 +1,6 @@
-export const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:4000';
+// When hosted on the same origin, use '' so requests go to the same server.
+// Override with VITE_API_URL for local dev or split deployments.
+export const API_BASE_URL = import.meta.env.VITE_API_URL ?? '';
 
 const DEFAULT_TIMEOUT_MS = 15000;
 const DEFAULT_RETRY_DELAY_MS = 300;

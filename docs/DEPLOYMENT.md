@@ -2,21 +2,12 @@
 
 ## Architecture
 
-- **Frontend (Web)**: Vercel - Static React app
-- **Backend (API)**: Railway - Express.js server
+- **Frontend + Backend**: Railway - Express.js serves both the API and the React SPA
 - **Database**: Railway PostgreSQL (or Neon)
 
-## Frontend - Vercel
+The server builds the web frontend and serves it as static files from the same origin, eliminating the need for a separate hosting provider (e.g., Vercel).
 
-Already configured via `vercel.json` in project root.
-
-### Environment Variables (Vercel Dashboard)
-
-| Variable | Value |
-|----------|-------|
-| `VITE_API_URL` | `https://your-railway-url.up.railway.app` |
-
-## Backend - Railway
+## Railway (All-in-One)
 
 ### Quick Deploy
 
@@ -24,6 +15,7 @@ Already configured via `vercel.json` in project root.
 2. **New Project** → **Deploy from GitHub repo**
 3. Select this repository
 4. Set **Root Directory**: `server`
+5. Railway will use `railway.json` to build both the frontend and backend
 
 ### Add PostgreSQL
 
@@ -38,8 +30,9 @@ Already configured via `vercel.json` in project root.
 | `PORT` | No | Defaults to Railway's assigned port |
 | `JWT_SECRET` | Yes | Generate: `openssl rand -base64 32` |
 | `CSRF_SECRET` | Yes | Generate: `openssl rand -base64 32` |
-| `CORS_ORIGINS` | Yes | Your Vercel URL (e.g., `https://timekeep.vercel.app`) |
 | `NODE_ENV` | Yes | Set to `production` |
+
+> **Note**: `CORS_ORIGINS` and `VITE_API_URL` are no longer required since the frontend and API are served from the same origin.
 
 ### Initialize Database
 
@@ -50,41 +43,40 @@ pnpm seed:admin
 
 ### Get Your URL
 
-Railway provides URL like: `https://timekeep-server-production.up.railway.app`
+Railway provides URL like: `https://timekeep-production.up.railway.app`
+
+Both the web app and API are served from this single URL.
 
 ## Post-Deployment Checklist
 
-- [ ] Railway backend deployed and healthy
+- [ ] Railway service deployed and healthy
 - [ ] PostgreSQL database connected
 - [ ] Admin seeded with `pnpm seed:admin`
-- [ ] Vercel `VITE_API_URL` points to Railway URL
-- [ ] Vercel redeployed after adding env var
-- [ ] CORS_ORIGINS includes Vercel domain
+- [ ] `JWT_SECRET` and `CSRF_SECRET` set
+- [ ] `NODE_ENV` set to `production`
 - [ ] Test login works on production
 
 ## Local Development
 
 ```bash
-# Start database
-docker-compose up -d
+# Start database + server (from project root)
+npm run dev:server
 
-# Start server
-cd server && pnpm dev
-
-# Start web
+# Start web (separate terminal)
 cd apps/web && pnpm dev
 ```
+
+In local dev, the web app runs on port 5173 and proxies API calls to port 4000. Set `VITE_API_URL=http://localhost:4000` in `apps/web/.env` for local development.
 
 ## Troubleshooting
 
 ### "Unable to connect to server"
-- Check `VITE_API_URL` is set in Vercel
 - Verify Railway server is running (check logs)
-- Ensure CORS_ORIGINS includes your frontend domain
+- Ensure the health check passes at `/health`
 
 ### CSRF errors
 - `CSRF_SECRET` must be set in production
-- Frontend and backend must share same domain scheme (both https)
+- Frontend and backend share the same origin automatically
 
 ### Database connection issues
 - Check `DATABASE_URL` is set

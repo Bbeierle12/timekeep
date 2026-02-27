@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
+    "build:full": "cd ../apps/web && pnpm build && cd ../../server && pnpm build && cp -r ../apps/web/dist ./dist/client",
     "start": "node dist/index.js",
     "seed:admin": "tsx src/db/seeds/seed-admin.ts",
     "seed:test": "tsx src/db/seeds/seed-test-data.ts",
