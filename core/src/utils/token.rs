@@ -18,30 +18,8 @@ pub fn hash_token(token: &str) -> String {
 pub fn generate_secure_token(length: Option<usize>) -> String {
     let len = length.unwrap_or(32);
     let mut bytes = vec![0u8; len];
-    getrandom(&mut bytes);
+    getrandom::fill(&mut bytes).expect("failed to generate secure random bytes");
     hex::encode(bytes)
-}
-
-/// Platform-independent secure random byte generation.
-fn getrandom(buf: &mut [u8]) {
-    use std::fs::File;
-    use std::io::Read;
-
-    // Use /dev/urandom on Unix
-    if let Ok(mut f) = File::open("/dev/urandom") {
-        let _ = f.read_exact(buf);
-        return;
-    }
-
-    // Fallback: use thread_rng-like approach via std
-    // This is a last resort; production should always have /dev/urandom
-    for byte in buf.iter_mut() {
-        *byte = (std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .subsec_nanos()
-            & 0xFF) as u8;
-    }
 }
 
 #[cfg(test)]

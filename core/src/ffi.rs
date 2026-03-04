@@ -20,9 +20,7 @@ use crate::utils::{compliance, time, token, validation};
 #[no_mangle]
 pub unsafe extern "C" fn timekeep_free_string(ptr: *mut c_char) {
     if !ptr.is_null() {
-        unsafe {
-            drop(CString::from_raw(ptr));
-        }
+        drop(CString::from_raw(ptr));
     }
 }
 
@@ -60,7 +58,7 @@ pub extern "C" fn timekeep_calculate_worked_minutes(
 /// `value` must be a valid null-terminated UTF-8 string.
 #[no_mangle]
 pub unsafe extern "C" fn timekeep_normalize_initials(value: *const c_char) -> *mut c_char {
-    let c_str = unsafe { CStr::from_ptr(value) };
+    let c_str = CStr::from_ptr(value);
     let input = match c_str.to_str() {
         Ok(s) => s,
         Err(_) => return std::ptr::null_mut(),
@@ -75,7 +73,7 @@ pub unsafe extern "C" fn timekeep_normalize_initials(value: *const c_char) -> *m
 /// `token_str` must be a valid null-terminated UTF-8 string.
 #[no_mangle]
 pub unsafe extern "C" fn timekeep_hash_token(token_str: *const c_char) -> *mut c_char {
-    let c_str = unsafe { CStr::from_ptr(token_str) };
+    let c_str = CStr::from_ptr(token_str);
     let input = match c_str.to_str() {
         Ok(s) => s,
         Err(_) => return std::ptr::null_mut(),
