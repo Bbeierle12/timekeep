@@ -40,5 +40,10 @@ export const config = {
   authCookieName: nodeEnv === 'production' ? '__Host-timekeep-session' : 'timekeep_session',
   rateLimitRedisUrl,
   // CSRF disabled by default in development, enabled by default in production
-  csrfEnabled: process.env.CSRF_ENABLED === 'true' || (nodeEnv === 'production' && process.env.CSRF_ENABLED !== 'false')
+  csrfEnabled: process.env.CSRF_ENABLED === 'true' || (nodeEnv === 'production' && process.env.CSRF_ENABLED !== 'false'),
+
+  // Supabase configuration
+  supabaseUrl: process.env.SUPABASE_URL ?? '',
+  supabaseAnonKey: process.env.SUPABASE_ANON_KEY ?? '',
+  supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY ?? '',
 };
