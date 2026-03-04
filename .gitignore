@@ -12,3 +12,8 @@ build/
 .vscode/
 .idea/
 .vercel
+
+# Rust
+core/target/
+**/*.rs.bk
+Cargo.lock

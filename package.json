@@ -15,7 +15,10 @@
     "test": "npm --workspaces run test:run --if-present",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "test:e2e:headed": "playwright test --headed"
+    "test:e2e:headed": "playwright test --headed",
+    "build:core": "cd core && cargo build --release",
+    "test:core": "cd core && cargo test",
+    "build:core:wasm": "cd core && wasm-pack build --target bundler --features wasm"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.0",
