@@ -34,6 +34,8 @@ async function runMigrations() {
   const migrationsDir = join(__dirname, 'migrations');
 
   const migrations = [
+    '001_initial_schema.sql',
+    '002_phase1_compliance.sql',
     '003_phase3_updates.sql',
     '004_phase4_updates.sql',
     '005_phase5_security_schema.sql',
