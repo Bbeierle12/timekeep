@@ -47,3 +47,38 @@ export const config = {
   supabaseAnonKey: process.env.SUPABASE_ANON_KEY ?? '',
   supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY ?? '',
 };
+
+/**
+ * Validate that all required environment variables are set.
+ * Call this before starting the server to fail fast on misconfiguration.
+ */
+export function validateEnvironment(): void {
+  const errors: string[] = [];
+
+  if (!config.databaseUrl) {
+    errors.push('DATABASE_URL is required');
+  }
+
+  if (config.nodeEnv === 'production') {
+    if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'replace_me') {
+      errors.push('JWT_SECRET must be set to a secure value in production');
+    }
+    if (!process.env.CSRF_SECRET) {
+      errors.push('CSRF_SECRET must be set in production');
+    }
+    if (!config.supabaseUrl) {
+      errors.push('SUPABASE_URL is required in production');
+    }
+    if (!config.supabaseServiceRoleKey) {
+      errors.push('SUPABASE_SERVICE_ROLE_KEY is required in production');
+    }
+  }
+
+  if (errors.length > 0) {
+    console.error('Environment validation failed:');
+    for (const err of errors) {
+      console.error(`  - ${err}`);
+    }
+    process.exit(1);
+  }
+}

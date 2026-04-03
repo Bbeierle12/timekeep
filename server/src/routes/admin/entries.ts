@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth } from '../../middleware/auth';
-import { requireAdmin } from '../../middleware/adminAuth';
+import { requireAdmin, requireAdminRole } from '../../middleware/adminAuth';
 import { timeEntryService } from '../../services/timeEntry.service';
 import { correctionService } from '../../services/correction.service';
 import { auditService } from '../../services/audit.service';
@@ -35,7 +35,8 @@ const correctionsListSchema = z.object({
 const updateEntrySchema = z.object({
   recordedAt: z.string().datetime().optional(),
   comment: z.string().optional().nullable(),
-  reason: z.string().min(3).max(1000)
+  reason: z.string().min(3).max(1000),
+  expectedVersion: z.number().int().optional()
 });
 
 const createEntrySchema = z.object({
@@ -138,7 +139,7 @@ router.get('/corrections', async (req, res) => {
   });
 });
 
-router.post('/:id/corrections', async (req, res) => {
+router.post('/:id/corrections', requireAdminRole(['owner', 'admin', 'payroll']), async (req, res) => {
   const parsed = correctionRequestSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ status: 'error', message: 'Invalid payload' });
@@ -171,7 +172,7 @@ router.post('/:id/corrections', async (req, res) => {
   }
 });
 
-router.post('/corrections/:id/approve', async (req, res) => {
+router.post('/corrections/:id/approve', requireAdminRole(['owner', 'admin', 'payroll']), async (req, res) => {
   const parsed = correctionDecisionSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ status: 'error', message: 'Invalid payload' });
@@ -201,7 +202,7 @@ router.post('/corrections/:id/approve', async (req, res) => {
   }
 });
 
-router.post('/corrections/:id/reject', async (req, res) => {
+router.post('/corrections/:id/reject', requireAdminRole(['owner', 'admin', 'payroll']), async (req, res) => {
   const parsed = correctionDecisionSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ status: 'error', message: 'Invalid payload' });
@@ -231,7 +232,7 @@ router.post('/corrections/:id/reject', async (req, res) => {
   }
 });
 
-router.post('/corrections/:id/apply', async (req, res) => {
+router.post('/corrections/:id/apply', requireAdminRole(['owner', 'admin', 'payroll']), async (req, res) => {
   const parsed = correctionDecisionSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ status: 'error', message: 'Invalid payload' });
@@ -262,7 +263,7 @@ router.post('/corrections/:id/apply', async (req, res) => {
   }
 });
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireAdminRole(['owner', 'admin', 'payroll']), async (req, res) => {
   const parsed = updateEntrySchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ status: 'error', message: 'Invalid payload. Reason is required.' });
@@ -274,7 +275,8 @@ router.put('/:id', async (req, res) => {
       recordedAt: parsed.data.recordedAt ? new Date(parsed.data.recordedAt) : undefined,
       comment: parsed.data.comment,
       correctedBy: req.user?.id,
-      correctionReason: parsed.data.reason
+      correctionReason: parsed.data.reason,
+      expectedVersion: parsed.data.expectedVersion
     });
 
     if (!updated) {
@@ -306,7 +308,7 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-router.post('/', async (req, res) => {
+router.post('/', requireAdminRole(['owner', 'admin', 'payroll']), async (req, res) => {
   const parsed = createEntrySchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ status: 'error', message: 'Invalid payload', errors: parsed.error.errors });

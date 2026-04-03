@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth } from '../../middleware/auth';
-import { requireAdmin } from '../../middleware/adminAuth';
+import { requireAdmin, requireAdminRole } from '../../middleware/adminAuth';
 import { getSettingsRow, updateSettings } from '../../services/settings.service';
 import { auditService } from '../../services/audit.service';
 
@@ -57,7 +57,7 @@ router.get('/', async (_req, res) => {
   res.json({ status: 'success', data: settings });
 });
 
-router.put('/', async (req, res) => {
+router.put('/', requireAdminRole(['owner']), async (req, res) => {
   const parsed = settingsSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ status: 'error', message: 'Invalid payload' });

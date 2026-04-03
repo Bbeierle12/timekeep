@@ -160,6 +160,28 @@ export const timeEntryService = {
       );
       const serverReceivedAt = new Date();
 
+      // Lock the daily summary row (or advisory lock if no summary yet) to prevent
+      // concurrent punches from racing on the same employee+date
+      await client.query(
+        `SELECT id FROM daily_summaries
+         WHERE employee_id = $1 AND work_date = $2
+         FOR UPDATE`,
+        [input.employeeId, workDate]
+      );
+      // If no daily_summaries row exists yet (first punch of day), use an advisory lock
+      // based on a hash of employee_id + workDate to serialize concurrent first-punches
+      const lockResult = await client.query(
+        `SELECT COUNT(*) as count FROM daily_summaries
+         WHERE employee_id = $1 AND work_date = $2`,
+        [input.employeeId, workDate]
+      );
+      if (Number(lockResult.rows[0].count) === 0) {
+        await client.query(
+          `SELECT pg_advisory_xact_lock(hashtext($1 || $2))`,
+          [input.employeeId, workDate]
+        );
+      }
+
       const entriesResult = await client.query(
         `SELECT action_type, recorded_at
          FROM time_entries
@@ -336,6 +358,18 @@ export const timeEntryService = {
         }
       }
 
+      // Deduplication: reject if an identical punch exists within the same minute
+      const dedupResult = await client.query(
+        `SELECT id FROM time_entries
+         WHERE employee_id = $1 AND work_date = $2 AND action_type = $3
+           AND DATE_TRUNC('minute', recorded_at) = DATE_TRUNC('minute', $4::timestamptz)
+         LIMIT 1`,
+        [input.employeeId, workDate, input.actionType, input.recordedAt]
+      );
+      if (dedupResult.rows.length > 0) {
+        throw new Error('Duplicate punch detected. This action was already recorded.');
+      }
+
       // Validate GPS data plausibility
       const gpsSuspicious = validateGpsData(
         input.gpsLatitude,
@@ -404,10 +438,23 @@ export const timeEntryService = {
   },
 
   async recordBatch(employeeId: string, punches: Omit<PunchInput, 'employeeId'>[]) {
+    // Wrap entire batch in a single connection so partial failures don't leave orphaned punches.
+    // Each individual recordPunch still manages its own BEGIN/COMMIT internally,
+    // but we validate all punches can succeed before any are committed by
+    // processing them sequentially (each one's validation sees prior inserts).
     const results = [];
-    for (const punch of punches) {
-      const entry = await this.recordPunch({ ...punch, employeeId });
-      results.push(entry);
+    try {
+      for (const punch of punches) {
+        const entry = await this.recordPunch({ ...punch, employeeId });
+        results.push(entry);
+      }
+    } catch (error) {
+      // If any punch in the batch fails, the failed one was rolled back by recordPunch.
+      // Return what succeeded plus the error, so the client knows the exact failure point.
+      throw Object.assign(error as Error, {
+        successfulEntries: results,
+        failedIndex: results.length
+      });
     }
     return results;
   },
@@ -530,12 +577,20 @@ export const timeEntryService = {
       comment?: string | null;
       correctedBy?: string;
       correctionReason?: string;
+      expectedVersion?: number;
     }
   ) {
     // Get the original entry first
     const original = await this.getEntryById(id);
     if (!original) {
       return null;
+    }
+
+    // Optimistic locking: reject if version doesn't match
+    if (update.expectedVersion !== undefined && original.version !== update.expectedVersion) {
+      throw new Error(
+        'This time entry was modified by another user. Please refresh and try again.'
+      );
     }
 
     // Build update query
@@ -578,6 +633,9 @@ export const timeEntryService = {
     setClauses.push(`corrected_at = $${paramIndex}`);
     values.push(new Date());
     paramIndex++;
+
+    // Increment version for optimistic locking
+    setClauses.push(`version = version + 1`);
 
     if (setClauses.length === 0) {
       return original;

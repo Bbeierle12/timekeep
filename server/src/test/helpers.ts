@@ -1,6 +1,6 @@
 import { vi, type Mock } from 'vitest';
 import request from 'supertest';
-import type { QueryResult, QueryResultRow } from 'pg';
+import type { QueryResult } from 'pg';
 import app from '../app';
 import { signToken } from '../utils/jwt';
 import { pool } from '../db/connection';

@@ -6,6 +6,7 @@ import { requireEmployee } from '../middleware/employeeAuth';
 import { employeeService } from '../services/employee.service';
 import { passwordResetService } from '../services/passwordReset.service';
 import { config } from '../config';
+import { logger } from '../utils/logger';
 
 const router = Router();
 
@@ -72,8 +73,16 @@ router.post('/employee/login', async (req, res) => {
   }
 
   setAuthCookie(res, result.token, result.expiresAt);
-  const { token, ...safeResult } = result;
+  const { token: _token, ...safeResult } = result;
   res.json({ status: 'success', data: safeResult });
+});
+
+const mfaVerifySchema = z.object({
+  challengeToken: z.string().min(1),
+  totpCode: z.string().length(6).regex(/^\d{6}$/).optional(),
+  recoveryCode: z.string().min(1).optional()
+}).refine(data => data.totpCode || data.recoveryCode, {
+  message: 'Either totpCode or recoveryCode is required'
 });
 
 router.post('/admin/login', async (req, res) => {
@@ -95,8 +104,47 @@ router.post('/admin/login', async (req, res) => {
     return;
   }
 
+  // MFA challenge — don't issue session yet
+  if ('mfaRequired' in result) {
+    const mfa = result as import('../services/auth.service').MfaChallengeResult;
+    res.json({
+      status: 'success',
+      data: {
+        mfaRequired: true,
+        mfaChallengeToken: mfa.mfaChallengeToken
+      }
+    });
+    return;
+  }
+
+  const success = result as import('../services/auth.service').AuthSuccess;
+  setAuthCookie(res, success.token, success.expiresAt);
+  const { token: _token, ...safeResult } = success;
+  res.json({ status: 'success', data: safeResult });
+});
+
+router.post('/admin/login/mfa', async (req, res) => {
+  const parsed = mfaVerifySchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ status: 'error', message: 'Invalid payload' });
+    return;
+  }
+
+  const result = await authService.verifyMfaAndLogin({
+    challengeToken: parsed.data.challengeToken,
+    totpCode: parsed.data.totpCode,
+    recoveryCode: parsed.data.recoveryCode,
+    ipAddress: req.ip,
+    userAgent: req.get('user-agent') ?? undefined
+  });
+
+  if (!result.ok) {
+    res.status(result.status).json({ status: 'error', message: result.message, code: result.code });
+    return;
+  }
+
   setAuthCookie(res, result.token, result.expiresAt);
-  const { token, ...safeResult } = result;
+  const { token: _token, ...safeResult } = result;
   res.json({ status: 'success', data: safeResult });
 });
 
@@ -131,7 +179,7 @@ router.post('/refresh', requireAuth, async (req, res) => {
   }
 
   setAuthCookie(res, result.token, result.expiresAt);
-  const { token, ...safeResult } = result;
+  const { token: _token, ...safeResult } = result;
   res.json({ status: 'success', data: safeResult });
 });
 
@@ -195,7 +243,7 @@ router.post('/admin/forgot-password', async (req, res) => {
       ...(process.env.NODE_ENV === 'development' && result.token ? { token: result.token } : {})
     });
   } catch (error) {
-    console.error('Password reset request error:', error);
+    logger.error('Password reset request error', { error: (error as Error).message });
     res.status(500).json({ status: 'error', message: 'An error occurred processing your request' });
   }
 });
@@ -214,7 +262,7 @@ router.post('/admin/validate-reset-token', async (req, res) => {
       data: { valid: result.valid }
     });
   } catch (error) {
-    console.error('Token validation error:', error);
+    logger.error('Token validation error', { error: (error as Error).message });
     res.status(500).json({ status: 'error', message: 'An error occurred validating the token' });
   }
 });
@@ -242,7 +290,7 @@ router.post('/admin/reset-password', async (req, res) => {
 
     res.json({ status: 'success', message: result.message });
   } catch (error) {
-    console.error('Password reset error:', error);
+    logger.error('Password reset error', { error: (error as Error).message });
     res.status(500).json({ status: 'error', message: 'An error occurred resetting your password' });
   }
 });

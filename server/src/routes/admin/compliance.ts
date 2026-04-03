@@ -54,7 +54,8 @@ router.get('/attestations', async (req, res) => {
 });
 
 router.get('/alerts', async (req, res) => {
-  const date = req.query.date ? String(req.query.date) : new Date().toISOString().slice(0, 10);
+  // When no date provided, let getDashboard compute it using company timezone
+  const date = req.query.date ? String(req.query.date) : undefined;
   const settings = await complianceService.getDashboard(date);
   res.json({ status: 'success', data: settings.activeAlerts });
 });

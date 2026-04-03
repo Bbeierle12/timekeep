@@ -31,12 +31,36 @@ export async function loginEmployee(initials: string, pin: string): Promise<Logi
   });
 }
 
-export async function loginAdmin(email: string, password: string): Promise<LoginResponse> {
-  return apiRequest<LoginResponse>('/api/v1/auth/admin/login', {
+export type MfaChallengeResponse = {
+  mfaRequired: true;
+  mfaChallengeToken: string;
+};
+
+export type AdminLoginResponse = LoginResponse | MfaChallengeResponse;
+
+function isMfaChallenge(data: AdminLoginResponse): data is MfaChallengeResponse {
+  return 'mfaRequired' in data && data.mfaRequired === true;
+}
+
+export async function loginAdmin(email: string, password: string): Promise<AdminLoginResponse> {
+  return apiRequest<AdminLoginResponse>('/api/v1/auth/admin/login', {
     method: 'POST',
     body: JSON.stringify({ email, password })
   });
 }
+
+export async function verifyMfa(params: {
+  challengeToken: string;
+  totpCode?: string;
+  recoveryCode?: string;
+}): Promise<LoginResponse> {
+  return apiRequest<LoginResponse>('/api/v1/auth/admin/login/mfa', {
+    method: 'POST',
+    body: JSON.stringify(params)
+  });
+}
+
+export { isMfaChallenge };
 
 export async function logout(): Promise<void> {
   await apiRequest('/api/v1/auth/logout', {

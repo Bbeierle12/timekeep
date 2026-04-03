@@ -141,7 +141,16 @@ router.post('/batch', requireAuth, requireEmployee, async (req, res) => {
       });
       return;
     }
-    res.status(400).json({ status: 'error', message: (error as Error).message });
+
+    // Report partial success info if available
+    const err = error as Error & { successfulEntries?: unknown[]; failedIndex?: number };
+    res.status(400).json({
+      status: 'error',
+      message: err.message,
+      successfulCount: err.successfulEntries?.length ?? 0,
+      failedIndex: err.failedIndex ?? null
+    });
+    return;
   }
 });
 

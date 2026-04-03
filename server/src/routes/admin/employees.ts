@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth } from '../../middleware/auth';
-import { requireAdmin } from '../../middleware/adminAuth';
+import { requireAdmin, requireAdminRole } from '../../middleware/adminAuth';
 import { employeeService } from '../../services/employee.service';
 import { employeeImportService } from '../../services/employeeImport.service';
 import { auditService } from '../../services/audit.service';
+import { logger } from '../../utils/logger';
 
 const router = Router();
 
@@ -78,7 +79,7 @@ router.get('/', async (req, res) => {
   });
 });
 
-router.post('/', async (req, res) => {
+router.post('/', requireAdminRole(['owner', 'admin']), async (req, res) => {
   const parsed = createEmployeeSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ status: 'error', message: 'Invalid payload' });
@@ -105,7 +106,7 @@ router.post('/', async (req, res) => {
 
     res.status(201).json({ status: 'success', data: employee });
   } catch (error) {
-    console.error('Failed to create employee:', error);
+    logger.error('Failed to create employee', { error: (error as Error).message });
     res.status(400).json({ status: 'error', message: 'Unable to create employee' });
   }
 });
@@ -120,7 +121,7 @@ router.get('/:id', async (req, res) => {
   res.json({ status: 'success', data: employee });
 });
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireAdminRole(['owner', 'admin']), async (req, res) => {
   const parsed = updateEmployeeSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ status: 'error', message: 'Invalid payload' });
@@ -147,7 +148,7 @@ router.put('/:id', async (req, res) => {
   res.json({ status: 'success', data: employee });
 });
 
-router.post('/:id/deactivate', async (req, res) => {
+router.post('/:id/deactivate', requireAdminRole(['owner', 'admin']), async (req, res) => {
   const employee = await employeeService.deactivate(req.params.id, req.user?.id);
   if (!employee) {
     res.status(404).json({ status: 'error', message: 'Employee not found' });
@@ -168,7 +169,7 @@ router.post('/:id/deactivate', async (req, res) => {
   res.json({ status: 'success', data: employee });
 });
 
-router.post('/:id/reactivate', async (req, res) => {
+router.post('/:id/reactivate', requireAdminRole(['owner', 'admin']), async (req, res) => {
   const employee = await employeeService.reactivate(req.params.id);
   if (!employee) {
     res.status(404).json({ status: 'error', message: 'Employee not found' });
@@ -189,7 +190,7 @@ router.post('/:id/reactivate', async (req, res) => {
   res.json({ status: 'success', data: employee });
 });
 
-router.post('/:id/reset-pin', async (req, res) => {
+router.post('/:id/reset-pin', requireAdminRole(['owner', 'admin']), async (req, res) => {
   const parsed = resetPinSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ status: 'error', message: 'Invalid payload' });
@@ -222,7 +223,7 @@ const importSchema = z.object({
   csvContent: z.string().min(1)
 });
 
-router.post('/import', async (req, res) => {
+router.post('/import', requireAdminRole(['owner', 'admin']), async (req, res) => {
   const parsed = importSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ status: 'error', message: 'Filename and CSV content are required' });
@@ -270,7 +271,7 @@ router.post('/import', async (req, res) => {
 
     res.json({ status: 'success', data: result });
   } catch (error) {
-    console.error('Employee import failed:', error);
+    logger.error('Employee import failed', { error: (error as Error).message });
     res.status(400).json({ status: 'error', message: 'Unable to import employees' });
   }
 });

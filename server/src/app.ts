@@ -6,14 +6,27 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import routes from './routes';
 import { config } from './config';
-import { globalRateLimiter, loginRateLimiter } from './middleware/rateLimiter';
+import { globalRateLimiter, loginRateLimiter, createRateLimiter } from './middleware/rateLimiter';
 import { csrfProtection, getCsrfToken, invalidCsrfTokenError } from './middleware/csrf';
+import { requestIdMiddleware } from './middleware/requestId';
+import { pool } from './db/connection';
+import { logger } from './utils/logger';
+import { Sentry } from './utils/sentry';
 import { ApiError } from './errors';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+
+// Trust the first proxy (Railway, Render, etc.) so req.ip reflects the real client IP
+// instead of the proxy's IP. This is critical for accurate rate limiting.
+if (config.nodeEnv === 'production') {
+  app.set('trust proxy', 1);
+}
+
+// Assign a unique request ID to every request for tracing
+app.use(requestIdMiddleware);
 
 // Security headers via helmet
 app.use(helmet({
@@ -71,6 +84,16 @@ app.use('/api/auth/employee/login', loginRateLimiter);  // Legacy (deprecated)
 app.use('/api/auth/admin/login', loginRateLimiter);     // Legacy (deprecated)
 app.use('/api/v1/auth/employee/login', loginRateLimiter);
 app.use('/api/v1/auth/admin/login', loginRateLimiter);
+app.use('/api/v1/auth/admin/login/mfa', loginRateLimiter);
+
+// Strict rate limiting for password reset endpoints (5 requests per hour per IP)
+const passwordResetLimiter = createRateLimiter(5, 60 * 60 * 1000);
+app.use('/api/auth/admin/forgot-password', passwordResetLimiter);
+app.use('/api/auth/admin/reset-password', passwordResetLimiter);
+app.use('/api/auth/admin/validate-reset-token', passwordResetLimiter);
+app.use('/api/v1/auth/admin/forgot-password', passwordResetLimiter);
+app.use('/api/v1/auth/admin/reset-password', passwordResetLimiter);
+app.use('/api/v1/auth/admin/validate-reset-token', passwordResetLimiter);
 
 // Apply global rate limiting to all API endpoints (100 requests per 15 minutes per IP)
 app.use('/api', globalRateLimiter);
@@ -83,8 +106,31 @@ app.get('/api/v1/csrf-token', getCsrfToken);
 // Apply CSRF protection to state-changing API requests
 app.use('/api', csrfProtection);
 
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok' });
+app.get('/health', async (_req, res) => {
+  try {
+    const dbStart = Date.now();
+    await pool.query('SELECT 1');
+    const dbLatencyMs = Date.now() - dbStart;
+
+    res.json({
+      status: 'ok',
+      dependencies: {
+        database: { status: 'ok', latencyMs: dbLatencyMs }
+      },
+      pool: {
+        total: pool.totalCount,
+        idle: pool.idleCount,
+        waiting: pool.waitingCount
+      }
+    });
+  } catch (err) {
+    res.status(503).json({
+      status: 'unhealthy',
+      dependencies: {
+        database: { status: 'error', message: (err as Error).message }
+      }
+    });
+  }
 });
 
 app.use('/api', routes);
@@ -122,8 +168,19 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
     return;
   }
 
-  // Log unexpected errors
-  console.error('Unhandled error:', err);
+  // Report to Sentry with request context
+  Sentry.captureException(err, {
+    extra: { requestId: _req.requestId, method: _req.method, path: _req.path }
+  });
+
+  // Log unexpected errors with request context
+  logger.error('Unhandled error', {
+    requestId: _req.requestId,
+    method: _req.method,
+    path: _req.path,
+    error: err.message,
+    stack: config.nodeEnv !== 'production' ? err.stack : undefined
+  });
 
   // Generic error response
   res.status(500).json({

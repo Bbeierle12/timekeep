@@ -4,6 +4,7 @@ import { requireAuth } from '../../middleware/auth';
 import { requireAdmin, requireAdminRole } from '../../middleware/adminAuth';
 import { adminService } from '../../services/admin.service';
 import { auditService } from '../../services/audit.service';
+import { logger } from '../../utils/logger';
 
 const router = Router();
 
@@ -51,7 +52,7 @@ router.post('/', requireAdminRole(['owner']), async (req, res) => {
 
     res.status(201).json({ status: 'success', data: admin });
   } catch (error) {
-    console.error('Failed to create admin:', error);
+    logger.error('Failed to create admin', { error: (error as Error).message });
     res.status(400).json({ status: 'error', message: 'Unable to create admin account' });
   }
 });
@@ -104,7 +105,7 @@ router.delete('/:id', requireAdminRole(['owner']), async (req, res) => {
 
     res.json({ status: 'success', data: result });
   } catch (error) {
-    console.error('Failed to delete admin:', error);
+    logger.error('Failed to delete admin', { error: (error as Error).message });
     res.status(400).json({ status: 'error', message: 'Unable to delete admin account' });
   }
 });

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth } from '../../middleware/auth';
-import { requireAdmin } from '../../middleware/adminAuth';
+import { requireAdmin, requireAdminRole } from '../../middleware/adminAuth';
 import { pool } from '../../db/connection';
 
 const router = Router();
@@ -17,7 +17,7 @@ const auditQuerySchema = z.object({
 
 router.use(requireAuth, requireAdmin);
 
-router.get('/', async (req, res) => {
+router.get('/', requireAdminRole(['owner', 'admin', 'compliance']), async (req, res) => {
   const parsed = auditQuerySchema.safeParse(req.query);
   if (!parsed.success) {
     res.status(400).json({ status: 'error', message: 'Invalid query' });
@@ -64,7 +64,31 @@ router.get('/', async (req, res) => {
     values
   );
 
-  res.json({ status: 'success', data: result.rows });
+  // Redact PII for non-owner admins: mask IP addresses and strip GPS from details
+  const isOwner = req.user?.role === 'owner';
+  const rows = result.rows.map((row) => {
+    if (isOwner) return row;
+
+    return {
+      ...row,
+      // Mask last octet of IP addresses
+      ip_address: row.ip_address
+        ? row.ip_address.replace(/\.\d+$/, '.***')
+        : null,
+      // Strip user agent (fingerprinting data)
+      user_agent: undefined,
+      // Redact GPS coordinates from details JSON if present
+      details: row.details && typeof row.details === 'object'
+        ? Object.fromEntries(
+            Object.entries(row.details as Record<string, unknown>).filter(
+              ([key]) => !['gps_latitude', 'gps_longitude', 'latitude', 'longitude'].includes(key)
+            )
+          )
+        : row.details
+    };
+  });
+
+  res.json({ status: 'success', data: rows });
 });
 
 export default router;

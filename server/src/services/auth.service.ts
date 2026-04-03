@@ -2,9 +2,13 @@ import { pool } from '../db/connection';
 import { getCompanySettings } from './settings.service';
 import { verifyPassword } from '../utils/hash';
 import { signToken } from '../utils/jwt';
-import { hashToken } from '../utils/token';
+import { hashToken, generateSecureToken } from '../utils/token';
 import { auditService } from './audit.service';
 import { certificationService } from './certification.service';
+import { mfaService } from './mfa.service';
+
+// MFA challenge tokens expire after 5 minutes
+const MFA_CHALLENGE_EXPIRY_MS = 5 * 60 * 1000;
 
 export type AuthSuccess = {
   ok: true;
@@ -29,6 +33,13 @@ export type AuthSuccess = {
     }>;
     summary: unknown;
   } | null;
+};
+
+export type MfaChallengeResult = {
+  ok: true;
+  mfaRequired: true;
+  mfaChallengeToken: string;
+  adminId: string;
 };
 
 export type AuthFailure = {
@@ -216,7 +227,7 @@ export const authService = {
     password: string;
     ipAddress?: string;
     userAgent?: string;
-  }): Promise<AuthSuccess | AuthFailure> {
+  }): Promise<AuthSuccess | MfaChallengeResult | AuthFailure> {
     const settings = await getCompanySettings();
     const email = params.email.trim().toLowerCase();
     const now = new Date();
@@ -266,8 +277,120 @@ export const authService = {
     }
 
     if (settings.mfa_required_admin && !admin.mfa_enabled) {
-      return { ok: false, status: 403, code: 'MFA_REQUIRED', message: 'MFA enrollment required' };
+      return { ok: false, status: 403, code: 'MFA_SETUP_REQUIRED', message: 'MFA enrollment required' };
     }
+
+    // If admin has MFA enabled, issue a challenge instead of a session
+    if (admin.mfa_enabled) {
+      const challengeToken = generateSecureToken(32);
+      const challengeExpiresAt = new Date(now.getTime() + MFA_CHALLENGE_EXPIRY_MS);
+
+      await pool.query(
+        `INSERT INTO mfa_challenges (admin_id, challenge_token_hash, expires_at, ip_address, user_agent)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [admin.id, hashToken(challengeToken), challengeExpiresAt, params.ipAddress ?? null, params.userAgent ?? null]
+      );
+
+      await auditService.log({
+        actorType: 'ADMIN',
+        actorId: admin.id,
+        actorIdentifier: admin.email,
+        action: 'MFA_CHALLENGE_ISSUED',
+        ipAddress: params.ipAddress,
+        userAgent: params.userAgent
+      });
+
+      return {
+        ok: true,
+        mfaRequired: true,
+        mfaChallengeToken: challengeToken,
+        adminId: admin.id
+      };
+    }
+
+    // No MFA — issue session directly
+    return this.issueAdminSession(admin, settings, params);
+  },
+
+  async verifyMfaAndLogin(params: {
+    challengeToken: string;
+    totpCode?: string;
+    recoveryCode?: string;
+    ipAddress?: string;
+    userAgent?: string;
+  }): Promise<AuthSuccess | AuthFailure> {
+    if (!params.totpCode && !params.recoveryCode) {
+      return { ok: false, status: 400, code: 'MFA_CODE_REQUIRED', message: 'TOTP code or recovery code required' };
+    }
+
+    const now = new Date();
+    const challengeHash = hashToken(params.challengeToken);
+
+    // Find and validate the challenge
+    const challengeResult = await pool.query(
+      `SELECT id, admin_id, expires_at
+       FROM mfa_challenges
+       WHERE challenge_token_hash = $1
+       LIMIT 1`,
+      [challengeHash]
+    );
+
+    if (challengeResult.rowCount === 0) {
+      return { ok: false, status: 401, code: 'INVALID_CHALLENGE', message: 'Invalid or expired MFA challenge' };
+    }
+
+    const challenge = challengeResult.rows[0];
+
+    // Delete the challenge immediately (single-use)
+    await pool.query('DELETE FROM mfa_challenges WHERE id = $1', [challenge.id]);
+
+    if (new Date(challenge.expires_at).getTime() < now.getTime()) {
+      return { ok: false, status: 401, code: 'CHALLENGE_EXPIRED', message: 'MFA challenge expired. Please log in again.' };
+    }
+
+    // Get admin and MFA secret
+    const adminResult = await pool.query(
+      `SELECT id, email, name, role, mfa_secret, is_active
+       FROM admins WHERE id = $1`,
+      [challenge.admin_id]
+    );
+
+    if (adminResult.rowCount === 0 || !adminResult.rows[0].is_active) {
+      return { ok: false, status: 403, code: 'ADMIN_INACTIVE', message: 'Admin inactive' };
+    }
+
+    const admin = adminResult.rows[0];
+
+    // Verify MFA code
+    let mfaValid = false;
+    if (params.totpCode) {
+      mfaValid = mfaService.verifyTotpCode(admin.mfa_secret, params.totpCode);
+    } else if (params.recoveryCode) {
+      mfaValid = await mfaService.verifyRecoveryCode(admin.id, params.recoveryCode);
+    }
+
+    if (!mfaValid) {
+      await auditService.log({
+        actorType: 'ADMIN',
+        actorId: admin.id,
+        actorIdentifier: admin.email,
+        action: 'MFA_VERIFY_FAILED',
+        ipAddress: params.ipAddress,
+        userAgent: params.userAgent
+      });
+      return { ok: false, status: 401, code: 'INVALID_MFA_CODE', message: 'Invalid MFA code' };
+    }
+
+    const settings = await getCompanySettings();
+    return this.issueAdminSession(admin, settings, params);
+  },
+
+  async issueAdminSession(
+    admin: { id: string; email: string; name: string; role: string },
+    settings: { session_duration_admin: number },
+    params: { ipAddress?: string; userAgent?: string }
+  ): Promise<AuthSuccess> {
+    const now = new Date();
 
     await pool.query(
       `UPDATE admins

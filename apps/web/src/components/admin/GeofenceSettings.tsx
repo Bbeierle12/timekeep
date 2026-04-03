@@ -56,8 +56,9 @@ export default function GeofenceSettings({
     handleSubmit,
     reset,
     formState: { errors },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } = useForm<LocationFormData>({
-    resolver: zodResolver(locationSchema),
+    resolver: zodResolver(locationSchema as any),
     defaultValues: editingLocation ?? undefined,
   });
 

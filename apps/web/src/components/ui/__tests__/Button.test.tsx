@@ -37,41 +37,43 @@ describe('Button', () => {
   });
 
   describe('variants', () => {
-    it('renders primary variant by default', () => {
+    it('renders default variant with primary classes', () => {
       render(<Button>Primary</Button>);
-      expect(screen.getByRole('button')).toHaveClass('bg-sky-500');
+      expect(screen.getByRole('button')).toHaveClass('bg-primary');
     });
 
     it('renders secondary variant', () => {
       render(<Button variant="secondary">Secondary</Button>);
-      expect(screen.getByRole('button')).toHaveClass('bg-slate-700');
+      expect(screen.getByRole('button')).toHaveClass('bg-secondary');
     });
 
-    it('renders ghost variant', () => {
+    it('renders ghost variant without background', () => {
       render(<Button variant="ghost">Ghost</Button>);
-      expect(screen.getByRole('button')).toHaveClass('bg-transparent');
+      const button = screen.getByRole('button');
+      expect(button).not.toHaveClass('bg-primary');
+      expect(button).not.toHaveClass('bg-secondary');
     });
 
-    it('renders danger variant', () => {
-      render(<Button variant="danger">Danger</Button>);
-      expect(screen.getByRole('button')).toHaveClass('bg-red-500');
+    it('renders destructive variant', () => {
+      render(<Button variant="destructive">Danger</Button>);
+      expect(screen.getByRole('button')).toHaveClass('bg-destructive');
     });
   });
 
   describe('sizes', () => {
-    it('renders medium size by default', () => {
+    it('renders default size', () => {
       render(<Button>Medium</Button>);
-      expect(screen.getByRole('button')).toHaveClass('px-4', 'py-2.5');
+      expect(screen.getByRole('button')).toHaveClass('h-9', 'px-4');
     });
 
     it('renders small size', () => {
       render(<Button size="sm">Small</Button>);
-      expect(screen.getByRole('button')).toHaveClass('px-3', 'py-1.5');
+      expect(screen.getByRole('button')).toHaveClass('h-8', 'px-3');
     });
 
     it('renders large size', () => {
       render(<Button size="lg">Large</Button>);
-      expect(screen.getByRole('button')).toHaveClass('px-6', 'py-3');
+      expect(screen.getByRole('button')).toHaveClass('h-10', 'px-8');
     });
   });
 

@@ -322,7 +322,124 @@ export const dailySummaryService = {
       }
     }
 
-    const hasViolation = Boolean(violationType) || Boolean(secondLunchViolationType) || Boolean(thirdLunchViolationType);
+    // Rest break violation detection: missing breaks = violation + premium pay
+    let restBreakViolation = false;
+    let restBreakPremiumCount = 0;
+    if (!isExempt && breaksRequired > 0 && clockOut) {
+      const missedBreaks = breaksRequired - breaksTaken;
+      if (missedBreaks > 0) {
+        restBreakViolation = true;
+        restBreakPremiumCount = missedBreaks; // 1 hour premium per missed break
+      }
+    }
+
+    // Weekly overtime: sum worked_minutes for the workweek and check 40hr threshold
+    let weeklyOvertimeMinutes = 0;
+    if (!isExempt && workedMinutes !== null) {
+      const weeklyThresholdMinutes = (settings.overtime_weekly_threshold ?? 40) * 60;
+      const weekStartDay = settings.week_start_day ?? 0; // 0 = Sunday
+
+      // Calculate workweek start date
+      const workDateObj = new Date(workDate + 'T00:00:00');
+      const dayOfWeek = workDateObj.getDay(); // 0=Sun, 6=Sat
+      const daysFromStart = (dayOfWeek - weekStartDay + 7) % 7;
+      const weekStart = new Date(workDateObj);
+      weekStart.setDate(weekStart.getDate() - daysFromStart);
+      const weekStartStr = weekStart.toISOString().slice(0, 10);
+      const weekEndObj = new Date(weekStart);
+      weekEndObj.setDate(weekEndObj.getDate() + 6);
+      const weekEndStr = weekEndObj.toISOString().slice(0, 10);
+
+      // Get worked minutes for other days in the same week (excluding current day)
+      const weekResult = await db.query(
+        `SELECT COALESCE(SUM(worked_minutes), 0) AS total
+         FROM daily_summaries
+         WHERE employee_id = $1 AND work_date >= $2 AND work_date <= $3 AND work_date != $4`,
+        [employeeId, weekStartStr, weekEndStr, workDate]
+      );
+
+      const otherDaysWorked = Number(weekResult.rows[0]?.total ?? 0);
+      const totalWeeklyWorked = otherDaysWorked + workedMinutes;
+
+      if (totalWeeklyWorked > weeklyThresholdMinutes) {
+        // Weekly OT = minutes that exceed the weekly threshold on this day
+        // Only count minutes from today that push the total over the threshold
+        const priorToThreshold = Math.max(0, weeklyThresholdMinutes - otherDaysWorked);
+        weeklyOvertimeMinutes = Math.max(0, workedMinutes - priorToThreshold);
+      }
+    }
+
+    // Seventh day rule: check for 7 consecutive days worked in the workweek
+    let isSeventhDay = false;
+    if (!isExempt && settings.seventh_day_rule_enabled && clockIn) {
+      const weekStartDay = settings.week_start_day ?? 0;
+      const workDateObj = new Date(workDate + 'T00:00:00');
+      const dayOfWeek = workDateObj.getDay();
+      const daysFromStart = (dayOfWeek - weekStartDay + 7) % 7;
+
+      // Only check if this is the 7th day of the workweek (index 6)
+      if (daysFromStart === 6) {
+        // Check if all 6 prior days had clock-ins
+        const weekStart = new Date(workDateObj);
+        weekStart.setDate(weekStart.getDate() - 6);
+        const weekStartStr = weekStart.toISOString().slice(0, 10);
+
+        const priorDaysResult = await db.query(
+          `SELECT COUNT(DISTINCT work_date) AS days_worked
+           FROM daily_summaries
+           WHERE employee_id = $1
+             AND work_date >= $2 AND work_date < $3
+             AND clock_in_at IS NOT NULL`,
+          [employeeId, weekStartStr, workDate]
+        );
+
+        const priorDaysWorked = Number(priorDaysResult.rows[0]?.days_worked ?? 0);
+        isSeventhDay = priorDaysWorked >= 6;
+      }
+    }
+
+    // If this is a seventh day, first 8 hours are 1.5x and beyond 8 are 2x
+    // This overrides the normal daily OT calculation
+    let finalOvertimeMinutes = overtimeMinutes;
+    let finalDoubletimeMinutes = doubletimeMinutes;
+    if (isSeventhDay && workedMinutes !== null && !isExempt) {
+      if (workedMinutes <= EIGHT_HOURS_MINUTES) {
+        // All hours on 7th day are at 1.5x rate
+        finalOvertimeMinutes = workedMinutes;
+        finalDoubletimeMinutes = 0;
+      } else {
+        // First 8 hours at 1.5x, remainder at 2x
+        finalOvertimeMinutes = EIGHT_HOURS_MINUTES;
+        finalDoubletimeMinutes = workedMinutes - EIGHT_HOURS_MINUTES;
+      }
+    }
+
+    // Certification deadline: compute when certification is due and whether it's overdue
+    let certificationDeadlineAt: Date | null = null;
+    let certificationOverdue = false;
+    if (clockOut) {
+      const deadlineHours = settings.certification_deadline_hours ?? 48;
+      certificationDeadlineAt = new Date(clockOut.getTime() + deadlineHours * 60 * 60 * 1000);
+
+      // Check existing certification status
+      const certResult = await db.query(
+        `SELECT is_certified FROM daily_summaries WHERE employee_id = $1 AND work_date = $2`,
+        [employeeId, workDate]
+      );
+      const isCertified = certResult.rows[0]?.is_certified ?? false;
+      if (!isCertified && new Date() > certificationDeadlineAt) {
+        certificationOverdue = true;
+      }
+    }
+
+    // Collect all violation types
+    const violationTypes: string[] = [];
+    if (violationType) violationTypes.push(violationType);
+    if (secondLunchViolationType) violationTypes.push(secondLunchViolationType);
+    if (thirdLunchViolationType) violationTypes.push(thirdLunchViolationType);
+    if (restBreakViolation) violationTypes.push('MISSED_REST_BREAK');
+
+    const hasViolation = violationTypes.length > 0;
 
     await db.query(
       `INSERT INTO daily_summaries
@@ -333,10 +450,13 @@ export const dailySummaryService = {
         third_lunch_start_at, third_lunch_end_at, third_lunch_duration_minutes,
         third_lunch_compliant, third_lunch_violation_type,
         total_shift_minutes, worked_minutes, overtime_minutes, doubletime_minutes,
-        breaks_required, breaks_taken,
-        has_violation, violation_type, shift_crosses_midnight,
-        has_split_shift, split_shift_gap_minutes, split_shift_premium_owed, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31)
+        weekly_overtime_minutes,
+        breaks_required, breaks_taken, rest_break_violation, rest_break_premium_count,
+        has_violation, violation_type, violation_types,
+        shift_crosses_midnight, is_seventh_day,
+        has_split_shift, split_shift_gap_minutes, split_shift_premium_owed,
+        certification_deadline_at, certification_overdue, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38)
        ON CONFLICT (employee_id, work_date)
        DO UPDATE SET
          clock_in_at = EXCLUDED.clock_in_at,
@@ -359,14 +479,21 @@ export const dailySummaryService = {
          worked_minutes = EXCLUDED.worked_minutes,
          overtime_minutes = EXCLUDED.overtime_minutes,
          doubletime_minutes = EXCLUDED.doubletime_minutes,
+         weekly_overtime_minutes = EXCLUDED.weekly_overtime_minutes,
          breaks_required = EXCLUDED.breaks_required,
          breaks_taken = EXCLUDED.breaks_taken,
+         rest_break_violation = EXCLUDED.rest_break_violation,
+         rest_break_premium_count = EXCLUDED.rest_break_premium_count,
          has_violation = EXCLUDED.has_violation,
          violation_type = EXCLUDED.violation_type,
+         violation_types = EXCLUDED.violation_types,
          shift_crosses_midnight = EXCLUDED.shift_crosses_midnight,
+         is_seventh_day = EXCLUDED.is_seventh_day,
          has_split_shift = EXCLUDED.has_split_shift,
          split_shift_gap_minutes = EXCLUDED.split_shift_gap_minutes,
          split_shift_premium_owed = EXCLUDED.split_shift_premium_owed,
+         certification_deadline_at = EXCLUDED.certification_deadline_at,
+         certification_overdue = EXCLUDED.certification_overdue,
          updated_at = EXCLUDED.updated_at`,
       [
         employeeId,
@@ -389,16 +516,23 @@ export const dailySummaryService = {
         thirdLunchViolationType,
         totalShiftMinutes,
         workedMinutes,
-        overtimeMinutes,
-        doubletimeMinutes,
+        finalOvertimeMinutes,
+        finalDoubletimeMinutes,
+        weeklyOvertimeMinutes,
         breaksRequired,
         breaksTaken,
+        restBreakViolation,
+        restBreakPremiumCount,
         hasViolation,
         violationType,
+        violationTypes,
         shiftCrossesMidnight,
+        isSeventhDay,
         hasSplitShift,
         splitShiftGapMinutes,
         splitShiftPremiumOwed,
+        certificationDeadlineAt,
+        certificationOverdue,
         new Date()
       ]
     );
@@ -410,13 +544,14 @@ export const dailySummaryService = {
     employeeId: string,
     workDate: string,
     premiumPayOwed: boolean,
-    violationCount: number = 1
+    violationCount: number = 1,
+    db: Queryable = pool
   ) {
     let premiumPayAmount: number | null = null;
 
     if (premiumPayOwed) {
       // Get employee's hourly rate to calculate premium pay (1 hour per violation)
-      const employeeResult = await pool.query(
+      const employeeResult = await db.query(
         'SELECT hourly_rate FROM employees WHERE id = $1',
         [employeeId]
       );
@@ -425,7 +560,7 @@ export const dailySummaryService = {
       premiumPayAmount = parseFloat(hourlyRate) * violationCount;
     }
 
-    await pool.query(
+    await db.query(
       `UPDATE daily_summaries
        SET premium_pay_owed = $1,
            premium_pay_amount = $2,

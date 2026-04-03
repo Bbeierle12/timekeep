@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint server
+        run: npm --workspace server run lint
+
+      - name: Type-check server
+        run: npx tsc --noEmit -p server/tsconfig.json
+
+      - name: Type-check web (non-blocking)
+        # Web has pre-existing zod v4 / @hookform/resolvers type mismatches.
+        # Run type-check for visibility but don't block the pipeline.
+        run: npx tsc --noEmit -p apps/web/tsconfig.json || true
+
+      - name: Test server
+        run: npm --workspace server run test:run
+
+      - name: Test web
+        run: npm --workspace apps/web run test:run
+
+      - name: Security audit
+        # Non-blocking: transitive dependency vulns in workspace packages
+        # are noisy. Review output manually in the Actions log.
+        run: npm audit --omit=dev --audit-level=critical || true

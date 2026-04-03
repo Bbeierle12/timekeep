@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth } from '../../middleware/auth';
-import { requireAdmin } from '../../middleware/adminAuth';
+import { requireAdmin, requireAdminRole } from '../../middleware/adminAuth';
 import { reportService } from '../../services/report.service';
 import { scheduledReportService } from '../../services/scheduledReport.service';
 import { auditService } from '../../services/audit.service';
@@ -39,6 +39,12 @@ router.get('/payroll', async (req, res) => {
   const parsed = rangeSchema.safeParse(req.query);
   if (!parsed.success) {
     res.status(400).json({ status: 'error', message: 'Missing date range' });
+    return;
+  }
+
+  // Stream large reports to avoid loading everything into memory
+  if (req.query.stream === 'true') {
+    await reportService.streamPayrollReport(parsed.data, res);
     return;
   }
 
@@ -100,7 +106,7 @@ router.get('/scheduled', async (_req, res) => {
   res.json({ status: 'success', data: scheduled });
 });
 
-router.post('/scheduled', async (req, res) => {
+router.post('/scheduled', requireAdminRole(['owner', 'admin']), async (req, res) => {
   const parsed = scheduledCreateSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ status: 'error', message: 'Invalid payload' });
@@ -126,7 +132,7 @@ router.post('/scheduled', async (req, res) => {
   res.status(201).json({ status: 'success', data: scheduled });
 });
 
-router.put('/scheduled/:id', async (req, res) => {
+router.put('/scheduled/:id', requireAdminRole(['owner', 'admin']), async (req, res) => {
   const parsed = scheduledUpdateSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ status: 'error', message: 'Invalid payload' });
@@ -153,7 +159,7 @@ router.put('/scheduled/:id', async (req, res) => {
   res.json({ status: 'success', data: scheduled });
 });
 
-router.delete('/scheduled/:id', async (req, res) => {
+router.delete('/scheduled/:id', requireAdminRole(['owner', 'admin']), async (req, res) => {
   const scheduled = await scheduledReportService.remove(req.params.id);
   if (!scheduled) {
     res.status(404).json({ status: 'error', message: 'Scheduled report not found' });

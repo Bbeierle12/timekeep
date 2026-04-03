@@ -1,5 +1,6 @@
 import { pool } from '../db/connection';
 import { getCompanySettings } from './settings.service';
+import { formatInTimeZone } from 'date-fns-tz';
 
 export type ComplianceAlert = {
   employeeId: string;
@@ -30,115 +31,48 @@ export type ComplianceDashboard = {
   }>;
 };
 
-function dateOnly(value: Date) {
-  return value.toISOString().slice(0, 10);
-}
-
-function addDays(value: Date, days: number) {
-  const copy = new Date(value);
-  copy.setDate(copy.getDate() + days);
-  return copy;
-}
-
 export const complianceService = {
   async getDashboard(workDate?: string): Promise<ComplianceDashboard> {
     const now = new Date();
-    const date = workDate ?? dateOnly(now);
     const settings = await getCompanySettings();
+    const timezone = settings.timezone || 'America/Los_Angeles';
+    const date = workDate ?? formatInTimeZone(now, timezone, 'yyyy-MM-dd');
 
-    // Total active employees
-    const totalEmployeesResult = await pool.query(
-      `SELECT COUNT(*) AS count FROM employees WHERE is_active = TRUE`
-    );
-
-    // Clocked in (working, not on lunch, not clocked out)
-    const clockedInResult = await pool.query(
-      `SELECT COUNT(DISTINCT te.employee_id) AS count
-       FROM time_entries te
-       WHERE te.work_date = $1
-         AND te.action_type = 'CLOCK_IN'
-         AND NOT EXISTS (
-           SELECT 1 FROM time_entries t2
-           WHERE t2.employee_id = te.employee_id
-             AND t2.work_date = $1
-             AND t2.action_type = 'CLOCK_OUT'
-         )
-         AND NOT EXISTS (
-           SELECT 1 FROM time_entries t3
-           WHERE t3.employee_id = te.employee_id
-             AND t3.work_date = $1
-             AND t3.action_type = 'LUNCH_START'
-             AND NOT EXISTS (
-               SELECT 1 FROM time_entries t4
-               WHERE t4.employee_id = te.employee_id
-                 AND t4.work_date = $1
-                 AND t4.action_type = 'LUNCH_END'
-             )
-         )`,
+    // Single query for employee status counts using GROUP BY instead of nested EXISTS.
+    // Derives each employee's status from their action types in one pass.
+    const statusResult = await pool.query(
+      `SELECT
+         (SELECT COUNT(*) FROM employees WHERE is_active = TRUE) AS total_employees,
+         COUNT(*) FILTER (WHERE has_clock_in AND NOT has_clock_out AND NOT on_lunch) AS clocked_in,
+         COUNT(*) FILTER (WHERE on_lunch) AS on_lunch,
+         COUNT(*) FILTER (WHERE has_clock_out) AS clocked_out
+       FROM (
+         SELECT
+           te.employee_id,
+           bool_or(te.action_type = 'CLOCK_IN') AS has_clock_in,
+           bool_or(te.action_type = 'CLOCK_OUT') AS has_clock_out,
+           bool_or(te.action_type = 'LUNCH_START')
+             AND NOT bool_or(te.action_type = 'LUNCH_END')
+             AND NOT bool_or(te.action_type = 'CLOCK_OUT') AS on_lunch
+         FROM time_entries te
+         WHERE te.work_date = $1
+         GROUP BY te.employee_id
+       ) employee_status`,
       [date]
     );
 
-    // On lunch (lunch started but not ended, not clocked out)
-    const onLunchResult = await pool.query(
-      `SELECT COUNT(DISTINCT te.employee_id) AS count
-       FROM time_entries te
-       WHERE te.work_date = $1
-         AND te.action_type = 'LUNCH_START'
-         AND NOT EXISTS (
-           SELECT 1 FROM time_entries t2
-           WHERE t2.employee_id = te.employee_id
-             AND t2.work_date = $1
-             AND t2.action_type = 'LUNCH_END'
-         )
-         AND NOT EXISTS (
-           SELECT 1 FROM time_entries t3
-           WHERE t3.employee_id = te.employee_id
-             AND t3.work_date = $1
-             AND t3.action_type = 'CLOCK_OUT'
-         )`,
+    // Single query for daily_summaries + waivers + attestations counts
+    const summaryResult = await pool.query(
+      `SELECT
+         (SELECT COUNT(*) FROM daily_summaries WHERE work_date = $1 AND is_certified = FALSE AND clock_out_at IS NOT NULL) AS pending_certifications,
+         (SELECT COUNT(*) FROM daily_summaries WHERE work_date = $1 AND has_violation = TRUE) AS violations_today,
+         (SELECT COUNT(*) FROM waivers WHERE work_date = $1 AND is_revoked = FALSE) AS waivers_today,
+         (SELECT COUNT(*) FROM attestations WHERE work_date = $1) AS attestations_today`,
       [date]
     );
 
-    // Clocked out
-    const clockedOutResult = await pool.query(
-      `SELECT COUNT(DISTINCT te.employee_id) AS count
-       FROM time_entries te
-       WHERE te.work_date = $1
-         AND te.action_type = 'CLOCK_OUT'`,
-      [date]
-    );
-
-    // Pending certifications
-    const pendingCertificationsResult = await pool.query(
-      `SELECT COUNT(*) AS count
-       FROM daily_summaries
-       WHERE work_date = $1 AND is_certified = FALSE AND clock_out_at IS NOT NULL`,
-      [date]
-    );
-
-    // Violations today
-    const violationsResult = await pool.query(
-      `SELECT COUNT(*) AS count
-       FROM daily_summaries
-       WHERE work_date = $1 AND has_violation = TRUE`,
-      [date]
-    );
-
-    // Waivers today
-    const waiversResult = await pool.query(
-      `SELECT COUNT(*) AS count
-       FROM waivers
-       WHERE work_date = $1 AND is_revoked = FALSE`,
-      [date]
-    );
-
-    // Attestations today
-    const attestationsResult = await pool.query(
-      `SELECT COUNT(*) AS count
-       FROM attestations
-       WHERE work_date = $1`,
-      [date]
-    );
+    const status = statusResult.rows[0] ?? {};
+    const summary = summaryResult.rows[0] ?? {};
 
     const rawAlerts = await this.getActiveAlerts(date, now, settings.lunch_reminder_1_hours,
       settings.lunch_reminder_2_hours, settings.lunch_reminder_urgent_hours);
@@ -169,14 +103,14 @@ export const complianceService = {
 
     return {
       date,
-      totalEmployees: Number(totalEmployeesResult.rows[0].count ?? 0),
-      clockedInCount: Number(clockedInResult.rows[0].count ?? 0),
-      onLunchCount: Number(onLunchResult.rows[0].count ?? 0),
-      clockedOutCount: Number(clockedOutResult.rows[0].count ?? 0),
-      pendingCertifications: Number(pendingCertificationsResult.rows[0].count ?? 0),
-      violationsToday: Number(violationsResult.rows[0].count ?? 0),
-      waiversToday: Number(waiversResult.rows[0].count ?? 0),
-      attestationsToday: Number(attestationsResult.rows[0].count ?? 0),
+      totalEmployees: Number(status.total_employees ?? 0),
+      clockedInCount: Number(status.clocked_in ?? 0),
+      onLunchCount: Number(status.on_lunch ?? 0),
+      clockedOutCount: Number(status.clocked_out ?? 0),
+      pendingCertifications: Number(summary.pending_certifications ?? 0),
+      violationsToday: Number(summary.violations_today ?? 0),
+      waiversToday: Number(summary.waivers_today ?? 0),
+      attestationsToday: Number(summary.attestations_today ?? 0),
       activeAlerts
     };
   },

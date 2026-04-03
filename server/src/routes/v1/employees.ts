@@ -9,6 +9,7 @@ import { reminderService } from '../../services/reminder.service';
 import { certificationService } from '../../services/certification.service';
 import { auditService } from '../../services/audit.service';
 import { getSettingsRow } from '../../services/settings.service';
+import { pool } from '../../db/connection';
 
 const router = Router();
 
@@ -150,6 +151,88 @@ router.post('/me/corrections', requireAuth, requireEmployee, async (req, res) =>
   });
 
   res.json({ status: 'success', data: summary });
+});
+
+/**
+ * GDPR / CCPA Data Subject Access Request (DSAR) endpoint.
+ * Returns all personal data the system holds for the authenticated employee.
+ */
+router.get('/me/data-export', requireAuth, requireEmployee, async (req, res) => {
+  const employeeId = req.user?.id;
+  if (!employeeId) {
+    res.status(401).json({ status: 'error', message: 'Missing auth context' });
+    return;
+  }
+
+  const [
+    profileResult,
+    entriesResult,
+    summariesResult,
+    attestationsResult,
+    waiversResult,
+    consentsResult
+  ] = await Promise.all([
+    pool.query(
+      `SELECT id, initials, full_name, email, phone_number, hire_date, hourly_rate,
+              is_active, is_exempt, created_at
+       FROM employees WHERE id = $1`,
+      [employeeId]
+    ),
+    pool.query(
+      `SELECT id, work_date, action_type, recorded_at, comment, resolved_address,
+              gps_latitude, gps_longitude, is_offline_sync, server_received_at
+       FROM time_entries WHERE employee_id = $1
+       ORDER BY recorded_at DESC`,
+      [employeeId]
+    ),
+    pool.query(
+      `SELECT work_date, clock_in_at, clock_out_at, worked_minutes, overtime_minutes,
+              doubletime_minutes, has_violation, violation_type, is_certified, certified_at
+       FROM daily_summaries WHERE employee_id = $1
+       ORDER BY work_date DESC`,
+      [employeeId]
+    ),
+    pool.query(
+      `SELECT work_date, attestation_type, selected_option, signed_at, triggers_premium
+       FROM attestations WHERE employee_id = $1
+       ORDER BY signed_at DESC`,
+      [employeeId]
+    ),
+    pool.query(
+      `SELECT work_date, waiver_type, signed_at, is_revoked, revoked_at
+       FROM waivers WHERE employee_id = $1
+       ORDER BY signed_at DESC`,
+      [employeeId]
+    ),
+    pool.query(
+      `SELECT consent_type, consent_version, accepted, consented_at
+       FROM employee_consents WHERE employee_id = $1
+       ORDER BY consented_at DESC`,
+      [employeeId]
+    )
+  ]);
+
+  await auditService.log({
+    actorType: 'EMPLOYEE',
+    actorId: employeeId,
+    actorIdentifier: req.user?.id,
+    action: 'DATA_EXPORT_REQUESTED',
+    ipAddress: req.ip,
+    userAgent: req.get('user-agent') ?? undefined
+  });
+
+  res.json({
+    status: 'success',
+    data: {
+      exportDate: new Date().toISOString(),
+      profile: profileResult.rows[0] ?? null,
+      timeEntries: entriesResult.rows,
+      dailySummaries: summariesResult.rows,
+      attestations: attestationsResult.rows,
+      waivers: waiversResult.rows,
+      consents: consentsResult.rows
+    }
+  });
 });
 
 export default router;

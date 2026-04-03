@@ -40,7 +40,11 @@ async function runMigrations() {
     '004_phase4_updates.sql',
     '005_phase5_security_schema.sql',
     '006_phase2_consents.sql',
-    '007_add_reminders_index.sql'
+    '007_add_reminders_index.sql',
+    '008_mfa_challenges.sql',
+    '009_punch_dedup_and_constraints.sql',
+    '010_compliance_enforcement.sql',
+    '011_optimistic_locking_and_cert_deadline.sql'
   ];
 
   console.log(`Connecting to database${databaseUrl?.includes('supabase') ? ' (Supabase)' : ' (local)'}...`);
@@ -53,12 +57,13 @@ async function runMigrations() {
       const sql = readFileSync(filePath, 'utf-8');
       await migrationPool.query(sql);
       console.log(`  ✓ ${migration} completed`);
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Ignore "already exists" errors for idempotent migrations
-      if (error.code === '42701' || error.code === '42710') {
+      const pgError = error as { code?: string; message?: string };
+      if (pgError.code === '42701' || pgError.code === '42710') {
         console.log(`  ✓ ${migration} already applied (skipped)`);
       } else {
-        console.error(`  ✗ ${migration} failed:`, error.message);
+        console.error(`  ✗ ${migration} failed:`, pgError.message);
       }
     }
   }

@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { createClient, type RedisClientType } from 'redis';
 import { config } from '../config';
+import { logger } from '../utils/logger';
 
 interface RateLimitEntry {
   count: number;
@@ -59,7 +60,7 @@ async function getRedisClient() {
   if (!redisClient) {
     redisClient = createClient({ url: config.rateLimitRedisUrl });
     redisClient.on('error', (error) => {
-      console.warn('Redis rate limit error:', error);
+      logger.warn('Redis rate limit error', { error: String(error) });
     });
   }
 
@@ -101,7 +102,7 @@ class RedisRateLimitStore implements RateLimitStore {
 
       return { count, resetTime: Date.now() + ttlMs };
     } catch (error) {
-      console.warn('Rate limit redis fallback:', error);
+      logger.warn('Rate limit redis fallback', { error: String(error) });
       return this.fallback.increment(key, windowMs);
     }
   }
@@ -164,7 +165,7 @@ async function applyRateLimit(
 
     next();
   } catch (error) {
-    console.error('Rate limiter failed:', error);
+    logger.error('Rate limiter failed', { error: String(error) });
     next();
   }
 }
