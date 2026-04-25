@@ -1,0 +1,16 @@
+env_file = ".env"
+
+[keys.supabase-url]
+env_var = "SUPABASE_URL"
+
+[keys.supabase-anon]
+env_var = "SUPABASE_ANON_KEY"
+
+[keys.supabase-service-role]
+env_var = "SUPABASE_SERVICE_ROLE_KEY"
+
+[keys.timekeep-jwt]
+env_var = "JWT_SECRET"
+
+[keys.timekeep-db-password]
+env_var = "DATABASE_URL"

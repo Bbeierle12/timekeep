@@ -23,6 +23,11 @@ const AdminAuditLog = lazy(() => import('./pages/admin/AuditLog'));
 const AdminSettings = lazy(() => import('./pages/admin/Settings'));
 const AdminAccounts = lazy(() => import('./pages/admin/AdminAccounts'));
 
+// Dev-only cockpit preview (tree-shaken in production builds).
+const CockpitPreview = import.meta.env.DEV
+  ? lazy(() => import('./pages/dev/CockpitPreview'))
+  : null;
+
 function LoadingSpinner() {
   return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center">
@@ -167,6 +172,11 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+
+        {/* Dev-only cockpit preview route */}
+        {CockpitPreview && (
+          <Route path="/dev/cockpit" element={<CockpitPreview />} />
+        )}
 
         {/* 404 fallback */}
         <Route path="*" element={<Navigate to={routes.employee.login} replace />} />

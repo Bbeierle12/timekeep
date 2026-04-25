@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>TimeKeep — Cockpit Prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  html, body { height: 100%; }
+  body {
+    font-family: 'Inter Tight', ui-sans-serif, system-ui, sans-serif;
+    background: #000;
+    color: #e8e6df;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  .ink-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+  .ink-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); }
+  .ink-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.22); }
+  .ink-scroll::-webkit-scrollbar-track { background: transparent; }
+  @keyframes fade-in { from { opacity:0; } to { opacity:1; } }
+  .fade-in { animation: fade-in .25s ease both; }
+  @keyframes slide-up { from { transform: translateY(12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  .slide-up { animation: slide-up .28s cubic-bezier(.2,.7,.2,1) both; }
+  * { -webkit-tap-highlight-color: transparent; }
+</style>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body class="min-h-screen">
+  <div id="root"></div>
+
+  <!-- Shared building blocks -->
+  <script type="text/babel" src="tk-data.jsx"></script>
+  <script type="text/babel" src="tk-primitives.jsx"></script>
+
+  <!-- Starter components -->
+  <script type="text/babel" src="ios-frame.jsx"></script>
+  <script type="text/babel" src="tweaks-panel.jsx"></script>
+
+  <!-- Cockpit theme -->
+  <script type="text/babel" src="tk-cockpit-primitives.jsx"></script>
+  <script type="text/babel" src="tk-cockpit-modals.jsx"></script>
+  <script type="text/babel" src="tk-cockpit-employee-flows.jsx"></script>
+  <script type="text/babel" src="tk-cockpit-employee-screens.jsx"></script>
+  <script type="text/babel" src="tk-cockpit-employee.jsx"></script>
+  <script type="text/babel" src="tk-cockpit-admin.jsx"></script>
+  <script type="text/babel" src="tk-cockpit-admin-extra.jsx"></script>
+
+  <!-- App shell (last) -->
+  <script type="text/babel" src="tk-app.jsx"></script>
+</body>
+</html>
